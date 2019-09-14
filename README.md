@@ -1,17 +1,6 @@
-# Winetricks
-[![Build Status](https://travis-ci.org/Winetricks/winetricks.svg?branch=master)](https://travis-ci.org/Winetricks/winetricks) [![License](http://img.shields.io/:license-lgpl-green.svg)](https://tldrlegal.com/license/gnu-lesser-general-public-license-v2.1-(lgpl-2.1))
+# Kreytricks!
 
-Homepage of Winetricks, previously hosted at <https://code.google.com/p/winetricks>.
-
-Winetricks is an easy way to work around problems in Wine.
-
-It has a menu of supported games/apps for which it can do all the workarounds automatically. It also allows the installation of missing DLLs and tweaking of various Wine settings.
-
-The latest version can be downloaded here:
-https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks
-
-Tagged releases are accessible here:
-https://github.com/Winetricks/winetricks/releases
+This is kreyren's personal branch for winetricks **NOT MEANT TO BE USED BY PUBLIC**
 
 # Installing
 The ```winetricks``` package should be used if it is available and up to date. The package is available in most mainstream (Unix-like) Operating Systems:
@@ -77,7 +66,7 @@ wget https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetric
 # Move the winetricks BASH completion script to a standard location for BASH completion modules. See:
 #   https://www.tldp.org/LDP/abs/html/tabexpansion.html
 sudo mv winetricks.bash-completion /usr/share/bash-completion/completions/winetricks
-_EOF_SCRIPT 
+_EOF_SCRIPT
 ###### create update_winetricks FINISH ########
 
 # Mark the update_winetricks script (we've just written out) as executable. See:
