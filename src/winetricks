@@ -20101,7 +20101,7 @@ w_metadata sammax301_demo games \
     year="2010" \
     media="manual_download" \
     file1="SamMax301_PC_Setup.exe" \
-    installed_exe1="$W_PROGRAMS_X86_WIN/Telltale Games/Sam and Max - The Devil's Playhouse/The Penal Zone/SamMax301.exe"
+    installed_exe1="$W_PROGRAMS_X86_WIN/Telltale Games/Sam and Max - The Devil\'s Playhouse/The Penal Zone/SamMax301.exe"
 
 load_sammax301_demo()
 {
