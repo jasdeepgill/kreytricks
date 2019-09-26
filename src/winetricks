@@ -15010,6 +15010,103 @@ load_sketchup()
 
 #----------------------------------------------------------------
 
+w_metadata origin apps \
+    title="Origin" \
+    publisher="Electronic Arts" \
+    year="2011" \
+    media="download" \
+    installed_exe1="${W_PROGRAMS_X86_WIN}/Origin/Origin.exe"
+
+load_origin() {
+  # NOTICE: Qt5Svg.dll is required for C:\\Program Files (x86)\\Origin\\imageformats\\qsvg.dll
+  # NOTICE: Both legacy and non-legacy are using dx11 and dxgi libs, but doesn't depend on them
+  # NOTICE: CTRL+V doesn't work in non-legacy
+
+  # Sanitization for client already installed
+  ## Since this supports multiple versions of origin we are unable to use winetricks's function
+  [ -e "${WINEPREFIX}/drive_c/Program Files (x86)/Origin/Origin.exe" ] && return 0
+
+  # Logic for DXVK
+  if [ -n "$WINETRICKS_ORIGIN_USE_DXVK" ]; then
+
+    # https://github.com/KhronosGroup/MoltenVK/issues/203
+    [ "$(uname)" = 'Darwin' ] && w_die "DXVK is not supported on MacOS due to the missing extension on MoltenVK"
+
+    w_call 'dxvk'
+
+    # Installer fails without overrides to OriginClientService assuming missing function in WINE
+    # https://bugs.winehq.org/show_bug.cgi?id=47773
+    if [ -n "$WINETRICKS_USE_LEGACY_ORIGIN" ]; then
+      w_override_app_dlls 'OriginClientService.exe' 'disabled' 'd3d10'
+      w_override_app_dlls 'OriginClientService.exe' 'disabled' 'd3d10_1'
+      w_override_app_dlls 'OriginClientService.exe' 'disabled' 'd3d10core'
+      w_override_app_dlls 'OriginClientService.exe' 'disabled' 'd3d11'
+      w_override_app_dlls 'OriginClientService.exe' 'disabled' 'dxgi'
+    fi
+
+  elif [ -z "$WINETRICKS_ORIGIN_USE_DXVK" ]; then
+    w_info "DXVK was disabled for origin client, to enable set WINETRICKS_ORIGIN_USE_DXVK variable to non-zero"
+
+    # Disable dxvk libraries if variable above is not set
+    w_override_app_dlls 'Origin.exe' 'disabled' 'd3d10'
+    w_override_app_dlls 'Origin.exe' 'disabled' 'd3d10_1'
+    w_override_app_dlls 'Origin.exe' 'disabled' 'd3d10core'
+    w_override_app_dlls 'Origin.exe' 'disabled' 'd3d11'
+    w_override_app_dlls 'Origin.exe' 'disabled' 'dxgi'
+
+    w_override_app_dlls 'IGOProxy.exe' 'disabled' 'd3d10'
+    w_override_app_dlls 'IGOProxy.exe' 'disabled' 'd3d10_1'
+    w_override_app_dlls 'IGOProxy.exe' 'disabled' 'd3d10core'
+    w_override_app_dlls 'IGOProxy.exe' 'disabled' 'd3d11'
+    w_override_app_dlls 'IGOProxy.exe' 'disabled' 'dxgi'
+
+    w_override_app_dlls 'IGOProxy64.exe' 'disabled' 'd3d10'
+    w_override_app_dlls 'IGOProxy64.exe' 'disabled' 'd3d10_1'
+    w_override_app_dlls 'IGOProxy64.exe' 'disabled' 'd3d10core'
+    w_override_app_dlls 'IGOProxy64.exe' 'disabled' 'd3d11'
+    w_override_app_dlls 'IGOProxy64.exe' 'disabled' 'dxgi'
+  fi
+
+  # Logic for installer
+  if [ -n "$WINETRICKS_USE_LEGACY_ORIGIN" ]; then
+
+    # legacy download
+    w_download 'https://origin-a.akamaihd.net/Origin-Client-Download/origin/legacy/OriginThinSetup.exe' '' 'OriginThinSetupLegacy.exe'
+
+    w_warn "You should *uncheck* sharing hardware info"
+
+    # Installer
+    WINEDEBUG='fixme-all' w_try "$WINE" "${W_CACHE}/origin/OriginThinSetupLegacy.exe"
+
+    # Switch back to default environment
+    w_unset_winver
+
+  elif [ -z "$WINETRICKS_USE_LEGACY_ORIGIN" ]; then
+
+    w_warn "winbind is required for this wineapp to work"
+
+    w_download 'https://origin-a.akamaihd.net/Origin-Client-Download/origin/live/OriginThinSetup.exe'
+
+    w_warn "You should *uncheck* sharing hardware info"
+
+    WINEDEBUG='fixme-all' w_try "$WINE" "${W_CACHE}/origin/OriginThinSetup.exe"
+  fi
+
+  # Wait untill origin is installed
+  ## Reverse-engineered stages https://github.com/Winetricks/winetricks/pull/1320#issuecomment-531577914
+  while [ ! -e "${WINEPREFIX}/drive_c/Program Files (x86)/Origin/3RDPARTYLICENSES.HTML" ]; do
+    sleep 5
+  done
+
+  # Fixing directory for game download https://github.com/Winetricks/winetricks/pull/1318#issuecomment-531460777
+  [ -n "$WINETRICKS_USE_LEGACY_ORIGIN" ] && (if grep -qF "DownloadInPlaceDir" "${WINEPREFIX}/drive_c/users/${USER}/Application Data/Origin/local.xml.old" 2>/dev/null; then
+    sed -i 's@<Setting type="10" key="DownloadInPlaceDir" value=.*@<Setting type="10" key="DownloadInPlaceDir" value="C:\\Program Files (x86)\\Origin Games\\"/>@' "${WINEPREFIX}/drive_c/users/${USER}/Application Data/Origin/local.xml.old" || w_warn 'Workaround for Download path was not applied, because expected setting is not used.'
+  else true ; fi)
+
+}
+
+#----------------------------------------------------------------
+
 w_metadata steam apps \
     title="Steam" \
     publisher="Valve" \
