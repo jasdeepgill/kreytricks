@@ -13329,12 +13329,21 @@ load_wineappimagebuilder()
   [ ! -x "$WINETRICKS_WORKDIR/squashfs-root/AppRun" ] && chmod +x "$WINETRICKS_WORKDIR/squashfs-root/AppRun"
 
   # Configure AppImage
-  [ ! -e "$WINETRICKS_WORKDIR/wine-4.17/" ] && { cp "$WINETRICKS_WORKDIR/squashfs-root/AppRun" "$WINETRICKS_WORKDIR/wine-4.17/" || w_die "Unable to copy '$WINETRICKS_WORKDIR/squashfs-root/AppRun' to '$WINETRICKS_WORKDIR/wine-4.17/'" ;}
-  [ ! -e "$WINETRICKS_WORKDIR/wine-4.17/appimagetool.desktop" ] && { cp "$WINETRICKS_WORKDIR/squashfs-root/appimagetool.desktop" "$WINETRICKS_WORKDIR/wine-4.17/" || die "Unable to copy '$WINETRICKS_WORKDIR/squashfs-root/appimagetool.desktop' to '$WINETRICKS_WORKDIR/wine-4.17/'" ;}
+  [ ! -e "$WINETRICKS_WORKDIR/wine-4.17/appimagetool.svg" ] && { cp "$WINETRICKS_WORKDIR/squashfs-root/appimagetool.svg" "$WINETRICKS_WORKDIR/wine-4.17/" || die "Unable to copy '$WINETRICKS_WORKDIR/squashfs-root/appimagetool.svg' to ''$WINETRICKS_WORKDIR/wine-4.17/'" ;}
+  printf '%s\n' \
+    '[Desktop Entry]' \
+    'Type=Application' \
+    "Name=$W_PACKAGE" \
+    'Exec=wine' \
+    'Comment=Created by winetricks' \
+    'Icon=appimagetool' \
+    'Categories=Development;' \
+    'Terminal=true' \
+  > "$WINETRICKS_WORKDIR/wine-4.17/appimagetool.desktop"
 
   (
     export ARCH='x86_64'
-    [ -e "$WINETRICKS_WORKDIR/wine-4.17/AppRun" ] && "$WINETRICKS_WORKDIR/wine-4.17/AppRun" -v "$WINETRICKS_WORKDIR/wine-4.17/" -u "gh-releases-zsync|$USER|Wine_Appimage|winetricks|wine-*winetricks.AppImage.zsync" "$W_PACKAGE.AppImage"
+    [ -e "$WINETRICKS_WORKDIR/squashfs-root/AppRun" ] && w_try "$WINETRICKS_WORKDIR/squashfs-root/AppRun" -u "gh-releases-zsync|$USER|Wine_Appimage|winetricks|wine-*winetricks.AppImage.zsync" "/home/kreyren/testing_wine/wine-4.17/" "test.AppImage"
   )
 }
 
