@@ -13328,7 +13328,12 @@ load_wineappimagebuilder()
   # Make appimage executable
   [ ! -x "$WINETRICKS_WORKDIR/squashfs-root/AppRun" ] && chmod +x "$WINETRICKS_WORKDIR/squashfs-root/AppRun"
 
+  # APPLY PATCHES
+  w_download "https://bugs.winehq.org/attachment.cgi?id=62956" '' "$W_CACHE/$W_PACKAGE/62956.diff"
+  patch "$WINETRICKS_WORKDIR/wine-4.17/dlls/ntdll/thread.c" "$W_CACHE/$W_PACKAGE/62956.diff" || w_die "Failed to apply patch"
+
   # Configure AppImage
+  # Both .svg and .desktop are mandatory
   [ ! -e "$WINETRICKS_WORKDIR/wine-4.17/appimagetool.svg" ] && { cp "$WINETRICKS_WORKDIR/squashfs-root/appimagetool.svg" "$WINETRICKS_WORKDIR/wine-4.17/" || die "Unable to copy '$WINETRICKS_WORKDIR/squashfs-root/appimagetool.svg' to ''$WINETRICKS_WORKDIR/wine-4.17/'" ;}
   printf '%s\n' \
     '[Desktop Entry]' \
@@ -13343,7 +13348,7 @@ load_wineappimagebuilder()
 
   (
     export ARCH='x86_64'
-    [ -e "$WINETRICKS_WORKDIR/squashfs-root/AppRun" ] && w_try "$WINETRICKS_WORKDIR/squashfs-root/AppRun" -u "gh-releases-zsync|$USER|Wine_Appimage|winetricks|wine-*winetricks.AppImage.zsync" "/home/kreyren/testing_wine/wine-4.17/" "test.AppImage"
+    [ -e "$WINETRICKS_WORKDIR/squashfs-root/AppRun" ] && w_try "$WINETRICKS_WORKDIR/squashfs-root/AppRun" -u "gh-releases-zsync|$USER|Wine_Appimage|winetricks|wine-*winetricks.AppImage.zsync" "/home/kreyren/testing_wine/wine-4.17/" "$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage"
   )
 }
 
