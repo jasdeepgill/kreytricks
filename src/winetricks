@@ -13330,6 +13330,7 @@ load_wineappimagebuilder()
   [ ! -x "$WINETRICKS_WORKDIR/squashfs-root/AppRun" ] && chmod +x "$WINETRICKS_WORKDIR/squashfs-root/AppRun"
 
   # APPLY PATCHES
+  wineappimagebuilder_patches
   w_download "https://bugs.winehq.org/attachment.cgi?id=62956" '' "$W_CACHE/$W_PACKAGE/62956.diff"
   patch "$WINETRICKS_WORKDIR/wine-4.17/dlls/ntdll/thread.c" "$W_CACHE/$W_PACKAGE/62956.diff" || w_die "Failed to apply patch"
 
@@ -18226,6 +18227,49 @@ load_hordesoforcs2_demo()
         }
         winwaitclose Orcs
     "
+}
+
+#----------------------------------------------------------------
+
+# https://appdb.winehq.org/objectManager.php?sClass=version&iId=37229
+
+w_metadata mtg_arena games \
+    title="Magic: The Gathering arena" \
+    publisher="Wizards of the Coast" \
+    year="2019" \
+    media="download" \
+    installed_exe1="$W_PROGRAMS_X86_WIN/Wizards of the Coast/MTGA/MTGA.exe"
+
+load_mtg_arena()
+{
+  # https://bugs.winehq.org/show_bug.cgi?id=45937#c13
+  if w_workaround_wine_bug 45937; then
+    w_call 'usetakefocus=disabled'
+  fi
+
+  # https://bugs.winehq.org/show_bug.cgi?id=47820
+  if w_workaround_wine_bug 47820; then
+    # Credit: ZeroPointEnergy (https://appdb.winehq.org/objectManager.php?sClass=version&iId=37229)
+    w_warn "This may take a while to load"
+    w_download "https://mtgarena.downloads.wizards.com/Live/Windows32/versions/1790.733462/MTGAInstaller_0.1.1790.733462.msi"
+    export file1="MTGAInstaller_0.1.1790.733462.msi"
+    w_warn "Installer is going to complain about permssions set on windows, these doesn't seem to be related to WINE and doesn't affect the runtime of game"
+  elif ! w_workaround_wine_bug 47820; then
+    w_download "https://mtgarena.downloads.wizards.com/Live/Windows32/MTGAInstaller.exe"
+    export file1="MTGAInstaller.msi"
+  fi
+
+  # https://bugs.winehq.org/show_bug.cgi?id=45898
+  if w_workaround_wine_bug 45898; then
+    w_warn "Affected by https://bugs.winehq.org/show_bug.cgi?id=45898"
+  fi
+
+  if w_workaround_wine_bug 45546; then
+    w_download "https://github.com/Kreyren/kreytricks/releases/download/7f230d2/MTGA.AppImage"
+    [ "$WINE" != "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ] && w_die "This installer requires patched wine from '$W_CACHE/$W_PACKAGE/MTGA.AppImage' provide this path to the WINE variable and execute the script again."
+  fi
+
+  (WINEDEBUG="fixme-all" w_try "$WINE" msiexec /i "${W_CACHE}/${W_PACKAGE}/${file1}")
 }
 
 #----------------------------------------------------------------
