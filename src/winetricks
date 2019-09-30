@@ -725,6 +725,15 @@ w_expand_env()
     winetricks_early_wine cmd.exe /c echo "%$1%"
 }
 
+# Check if $1 is executable (output custom message using w_debug if $2 is specified)
+w_check_exec()
+{
+  if ! command -v "$1" >/dev/null; then
+    [ -z "$2" ] && { printf "Command '%s' is not executable" "$1" && exit 1 ;} || printf '%s\n' "$2"
+  elif command -v "$1" >/dev/null; then w_debug "Command '$1' is executable"
+  fi
+}
+
 # Get the latest tagged release from github.com API
 w_get_github_latest_release()
 {
@@ -13265,14 +13274,6 @@ load_wineappimagebuilder()
 {
   # Get wine source
   # STUB: use $WINETRICKS_WORKDIR for workdir
-
-  # TODO: make MR to Winetricks
-  w_check_exec() {
-    if ! command -v "$1" >/dev/null; then
-      [ -n "$2" ] && printf "Command '%s' is not executable" "$1" || printf '%s\n' "$2"
-    elif command -v "$1" >/dev/null; then w_debug "Command '$1' is executable"
-    fi
-  }
 
   WINETRICKS_WORKDIR="/home/kreyren/testing_wine"
   # Credit: https://stackoverflow.com/a/18963118
