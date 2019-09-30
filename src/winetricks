@@ -13291,17 +13291,15 @@ load_wineappimagebuilder()
     [ -z "$wineappimagebuilder_wine_version" ] && export wineappimagebuilder_wine_version="wine-4.17"
 
     # Logic to fetch expected WINE version
+    export wineappimagebuilder_wine_version_stripped="${wineappimagebuilder_wine_version#?????}"
     case "$wineappimagebuilder_wine_version" in
       # Attempt to provide future compatibility
-      wine-[3-9].0*)
-        [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/${wineappimagebuilder_wine_version:5:-3}.0/$wineappimagebuilder_wine_version.tar.xz"
+      # TODO: needs improvement supports wine-[3-9].0|wine-[3-9].[0-9] only instead of wine-[3-9].[0-9]*
+      wine-[3-9].0.*)
+        [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/${wineappimagebuilder_wine_version_stripped%???}.0/$wineappimagebuilder_wine_version.tar.xz"
       ;;
       wine-[3-9].[0-9]*)
-        [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/${wineappimagebuilder_wine_version:5:-3}.x/$wineappimagebuilder_wine_version.tar.xz"
-      ;;
-      # Testing
-      wine-4.17)
-        [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/4.x/$wineappimagebuilder_wine_version.tar.xz"
+        [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/${wineappimagebuilder_wine_version_stripped%???}.x/$wineappimagebuilder_wine_version.tar.xz"
       ;;
       # Cherrypicked
       wine-1.9.[0-9]|wine-1.9.[0-9][0-9])
