@@ -18309,7 +18309,6 @@ w_metadata mtg_arena games \
 
 load_mtg_arena()
 {
-
   # https://bugs.winehq.org/show_bug.cgi?id=45937#c13
   if w_workaround_wine_bug 45937; then
     w_call 'usetakefocus=disabled'
@@ -18345,7 +18344,7 @@ load_mtg_arena()
     elif [ -z "$WINETRICKS_BUILD_WINE" ]; then
       w_download "https://github.com/Kreyren/kreytricks/releases/download/7f230d2/MTGA.AppImage"
     fi
-    [ "$WINE" != "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ] && w_die "This installer requires patched wine from '$W_CACHE/$W_PACKAGE/MTGA.AppImage' provide this path to the WINE variable and execute the script again."
+    [ "$WINE" != "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ] || [ "$WINE" != "$W_CACHE/$W_PACKAGE/mtg_arena.AppImage" ] && w_die "This installer requires patched wine named MTGA.AppImage' or 'mtg_arena.AppImage' from '$W_CACHE/$W_PACKAGE/' provide this path to the WINE variable and execute the script again. (You can also blacklist winebug 45546)"
   fi
 
   (WINEDEBUG="fixme-all" w_try "$WINE" msiexec /i "${W_CACHE}/${W_PACKAGE}/${file1}")
