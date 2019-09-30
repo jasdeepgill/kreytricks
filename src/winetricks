@@ -13261,7 +13261,7 @@ load_allfonts()
 # tools
 #######################
 
-#----------------------------------------------------------------
+# ----------------------------------------------------------------
 
 # TODO: Add tools metadata
 w_metadata wineappimagebuilder apps \
@@ -13273,68 +13273,134 @@ w_metadata wineappimagebuilder apps \
 load_wineappimagebuilder()
 {
   # Get wine source
-  # STUB: use $WINETRICKS_WORKDIR for workdir
+  [ -z "$wineappimagebuilder_workdir" ] && export wineappimagebuilder_workdir="$WINETRICKS_WORKDIR"
 
-  WINETRICKS_WORKDIR="/home/kreyren/testing_wine"
+  # TODO: Always use latest if none is selected
+  [ -z "$wineappimagebuilder_wine_version" ] && export wineappimagebuilder_wine_version="wine-4.17"
+
+  # Logic to fetch expected WINE version
+  case "$wineappimagebuilder_wine_version" in
+    # Attempt to provide future compatibility
+    [3-9].0*)
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/${wineappimagebuilder_wine_version:5:-3}.0/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    [3-9].[0-9]*)
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/${wineappimagebuilder_wine_version:5:-3}.x/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    # Cherrypicked
+    wine-1.9.[0-9]|wine-1.9.[0-9][0-9])
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.9/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    wine-1.8.[0-9]|wine-1.8.[0-9][0-9]|wine-1.8.[0-9]-rc*|wine-1.8.[0-9][0-9]-rc*)
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.8/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    wine-1.7.[0-9]|wine-1.7.[0-9][0-9])
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.7/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    wine-1.6.[0-9]|wine-1.6.[0-9][0-9]|wine-1.6.[0-9]-rc*|wine-1.6-rc*|wine-1.6.[0-9][0-9]-rc*)
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.6/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    wine-1.5.[0-9]|wine-1.5.[0-9][0-9])
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.5/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    wine-1.4.[0-9]|wine-1.4.[0-9][0-9]||wine-1.4.[0-9]-rc*|wine-1.4.[0-9][0-9]-rc*)
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.4/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    wine-1.3.[0-9]|wine-1.3.[0-9][0-9])
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.3/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    wine-1.2.[0-9]|wine-1.2.[0-9][0-9]|wine-1.2.[0-9]-rc*|wine-1.2-rc*|wine-1.2.[0-9][0-9]-rc*)
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.2/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    wine-1.1.[0-9]|wine-1.1.[0-9][0-9])
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.1/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    wine-1.0.[0-9]|wine-1.0.[0-9][0-9]|wine-1.0.[0-9]-rc*|wine-1.0-rc*|wine-1.0.[0-9][0-9]-rc*)
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.0/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    wine-1.1.[0-9]|wine-1.1.[0-9][0-9])
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.0/$wineappimagebuilder_wine_version.tar.xz"
+    ;;
+    *) w_die "wineappimagebuilder doesn't support '$1' in wineappimagebuilder_wine_version variable"
+  esac
   # Credit: https://stackoverflow.com/a/18963118
+
   gcc_optimization() { gcc -### -E - -march=native 2>&1 | sed -r '/cc1/!d;s/(")|(^.* - )|( -mno-[^\ ]+)//g' ;}
 
   # Abstract: Make compilation as fast as possible for those using it
-  export COMMON_FLAGS="`gcc_optimization` --pipe"
-  export CFLAGS="$COMMON_FLAGS"
-  export CXXFLAGS="$COMMON_FLAGS"
-  export FCLAGS="$COMMON_FLAGS"
-  export FFLAGS="$COMMON_FLAGS"
-  export FCFLAGS="$COMMON_FLAGS"
+  export COMMON_FLAGS="$(gcc_optimization) --pipe"
+  [ -z "$CFLAGS" ] && export CFLAGS="$COMMON_FLAGS"
+  [ -z "$CXXFLAGS" ] && export CXXFLAGS="$COMMON_FLAGS"
+  [ -z "$FCFLAGS" ] && export FCLAGS="$COMMON_FLAGS"
+  [ -z "$FFLAGS" ] && export FFLAGS="$COMMON_FLAGS"
+  [ -z "$FCFLAGS" ] && export FCFLAGS="$COMMON_FLAGS"
 
   # Fetch WINE source
   # TODO: Allow fetching different versions of WINE
-  [ ! -e "$W_CACHE/$W_PACKAGE/wine-4.17.tar.xz" ] && w_download 'https://dl.winehq.org/wine/source/4.x/wine-4.17.tar.xz'
+  [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/4.x/$wineappimagebuilder_wine_version.tar.xz"
 
-  [ ! -e "$WINETRICKS_WORKDIR/wine-4.17" ] && { mkdir "$WINETRICKS_WORKDIR/wine-4.17" || w_die "failed to make a new directory in '$WINETRICKS_WORKDIR/wine-4.17" ;} || w_debug "Directory '$WINETRICKS_WORKDIR/wine-4.17' already exists"
+  # shellcheck disable=SC2015
+  [ ! -e "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version" ] && { mkdir "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version" || w_die "failed to make a new directory in '$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version" ;} || w_debug "Directory '$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version' already exists"
 
-  [ ! -e "$WINETRICKS_WORKDIR/wine-4.17/LICENSE" ] && tar -xf "$W_CACHE/$W_PACKAGE/wine-4.17.tar.xz" -C "$WINETRICKS_WORKDIR/"
+  [ ! -e "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version/LICENSE" ] && tar -xf "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" -C "$wineappimagebuilder_workdir/"
 
-    # Compile WINE
-  ## TODO: Logic for compilation of WINE
+  # Compile WINE
   w_check_exec 'flex'
   w_check_exec 'bison'
   w_check_exec 'make'
-  # TODO: Enable win64 on demand
+
+  w_warn "Wine64 is built depending on WINEARCH variable"
+
   ## We are fetching wine from official release -> no regression tests needed
   (
     # TODO: Avoid using cd
-    w_try_cd "$WINETRICKS_WORKDIR/wine-4.17"
-    [ ! -e "$WINETRICKS_WORKDIR/wine-4.17/Makefile" ] && w_try "$WINETRICKS_WORKDIR/wine-4.17/configure" --disable-tests --srcdir="$WINETRICKS_WORKDIR/wine-4.17/" --enable-win64
+    w_try_cd "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version"
+    [ ! -e "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version/Makefile" ] && w_try "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version/configure" --disable-tests --srcdir="$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version/" "$([ "$WINEARCH" = "win64" ] && printf '%s\n' "--enable-win64")"
   )
-  # TODO: Apply patches
-  [ ! -e "$WINETRICKS_WORKDIR/wine-4.17/libs/wine/libwine.so.1.0" ] && w_warn "We are about to compile whole WINE, this is going to take some time.." && w_try make -C "$WINETRICKS_WORKDIR/wine-4.17/" "$([ -n "$(nproc)" ] && echo "-j$(nproc)")"
+  [ ! -e "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version/libs/wine/libwine.so.1.0" ] && w_warn "We are about to compile whole WINE, this is going to take some time.."
+  w_try make -C "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version/" "$([ -n "$(nproc)" ] && printf '%s\n' "-j$(nproc)")"
 
   # Get appimagetool
-  [ ! -e "$W_CACHE/$W_PACKAGE/appimagetool-x86_64.AppImage" ] && w_download 'https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage'
-  [ ! -e "$WINETRICKS_WORKDIR/appimagetool.AppImage" ] && [ -e "$W_CACHE/$W_PACKAGE/appimagetool-x86_64.AppImage" ] && cp -r "$W_CACHE/$W_PACKAGE/appimagetool-x86_64.AppImage" "$WINETRICKS_WORKDIR"
-  [ ! -x "$WINETRICKS_WORKDIR/appimagetool.AppImage" ] && { chmod +x "$WINETRICKS_WORKDIR/appimagetool-x86_64.AppImage" || w_die "Unable to set executable permissions on '$WINETRICKS_WORKDIR/appimagetool-x86_64.AppImage'" ;} || w_debug "File '$WINETRICKS_WORKDIR/appimagetool-x86_64.AppImage' is already executable"
+  if [ "$WINEARCH" = 'win64' ]; then
+    [ ! -e "$W_CACHE/$W_PACKAGE/appimagetool-x86_64.AppImage" ] && w_download 'https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage'
+    [ ! -e "$wineappimagebuilder_workdir/appimagetool.AppImage" ] && [ -e "$W_CACHE/$W_PACKAGE/appimagetool-x86_64.AppImage" ] && cp -r "$W_CACHE/$W_PACKAGE/appimagetool-x86_64.AppImage" "$wineappimagebuilder_workdir"
+    # shellcheck disable=SC2015
+    [ ! -x "$wineappimagebuilder_workdir/appimagetool.AppImage" ] && { chmod +x "$wineappimagebuilder_workdir/appimagetool-x86_64.AppImage" || w_die "Unable to set executable permissions on '$wineappimagebuilder_workdir/appimagetool-x86_64.AppImage'" ;} || w_debug "File '$wineappimagebuilder_workdir/appimagetool-x86_64.AppImage' is already executable"
 
+    ## Export in workdir
+    [ ! -e "$wineappimagebuilder_workdir/appimagetool-x86_64.AppImage" ] && [ -e "$W_CACHE/$W_PACKAGE/appimagetool-x86_64.AppImage" ] && cp "$W_CACHE/$W_PACKAGE/appimagetool-x86_64.AppImage" "$wineappimagebuilder_workdir/"
+    [ ! -x "$wineappimagebuilder_workdir/appimagetool-x86_64.AppImage" ] && chmod +x "$wineappimagebuilder_workdir/appimagetool-x86_64.AppImage"
 
-  ## Export in workdir
-  [ ! -e "$WINETRICKS_WORKDIR/appimagetool-x86_64.AppImage" ] && [ -e "$W_CACHE/$W_PACKAGE/appimagetool-x86_64.AppImage" ] && cp "$W_CACHE/$W_PACKAGE/appimagetool-x86_64.AppImage" "$WINETRICKS_WORKDIR/"
-  [ ! -x "$WINETRICKS_WORKDIR/appimagetool-x86_64.AppImage" ] && chmod +x "$WINETRICKS_WORKDIR/appimagetool-x86_64.AppImage"
+    export wineappimagebuilder_appimagetool="appimagetool-x86_64.AppImage"
+  elif [ "$WINEARCH" = 'win32' ]; then
+    [ ! -e "$W_CACHE/$W_PACKAGE/appimagetool-i686.AppImage" ] && w_download 'https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-i686.AppImage'
+    [ ! -e "$wineappimagebuilder_workdir/appimagetool.AppImage" ] && [ -e "$W_CACHE/$W_PACKAGE/appimagetool-i686.AppImage" ] && cp -r "$W_CACHE/$W_PACKAGE/appimagetool-i686.AppImage" "$wineappimagebuilder_workdir"
+    [ ! -x "$wineappimagebuilder_workdir/appimagetool.AppImage" ] && { chmod +x "$wineappimagebuilder_workdir/appimagetool-i686.AppImage" || w_die "Unable to set executable permissions on '$wineappimagebuilder_workdir/appimagetool-i686.AppImage'" ;} || w_debug "File '$wineappimagebuilder_workdir/appimagetool-i686.AppImage' is already executable"
+
+    ## Export in workdir
+    [ ! -e "$wineappimagebuilder_workdir/appimagetool-i686.AppImage" ] && [ -e "$W_CACHE/$W_PACKAGE/appimagetool-i686.AppImage" ] && cp "$W_CACHE/$W_PACKAGE/appimagetool-i686.AppImage" "$wineappimagebuilder_workdir/"
+    [ ! -x "$wineappimagebuilder_workdir/appimagetool-i686.AppImage" ] && chmod +x "$wineappimagebuilder_workdir/appimagetool-i686.AppImage"
+
+    export wineappimagebuilder_appimagetool="appimagetool-i686.AppImage"
+  else w_die "Unsupported WINEARCH ($WINEARCH)"
+  fi
 
   # Build AppImage
   (
-    w_try_cd "$WINETRICKS_WORKDIR"
-    [ ! -e "$WINETRICKS_WORKDIR/squashfs-root/AppRun" ] && w_try "$WINETRICKS_WORKDIR/appimagetool-x86_64.AppImage" --appimage-extract
+    w_try_cd "$wineappimagebuilder_workdir"
+    [ ! -e "$wineappimagebuilder_workdir/squashfs-root/AppRun" ] && w_try "$wineappimagebuilder_workdir/$wineappimagebuilder_appimagetool" --appimage-extract
   )
 
   # Make appimage executable
-  [ ! -x "$WINETRICKS_WORKDIR/squashfs-root/AppRun" ] && chmod +x "$WINETRICKS_WORKDIR/squashfs-root/AppRun"
+  [ ! -x "$wineappimagebuilder_workdir/squashfs-root/AppRun" ] && chmod +x "$wineappimagebuilder_workdir/squashfs-root/AppRun"
 
   # APPLY PATCHES
-  wineappimagebuilder_patches
+  # shellcheck disable=SC2015
+  [ -n "$(wineappimagebuilder_patches)" ] && { wineappimagebuilder_patches ;} || w_warn "No patches ware applied, define 'wineappimagebuilder_patches' in your verb to apply them"
 
   # Configure AppImage
   # Both .svg and .desktop are mandatory
-  [ ! -e "$WINETRICKS_WORKDIR/wine-4.17/appimagetool.svg" ] && { cp "$WINETRICKS_WORKDIR/squashfs-root/appimagetool.svg" "$WINETRICKS_WORKDIR/wine-4.17/" || die "Unable to copy '$WINETRICKS_WORKDIR/squashfs-root/appimagetool.svg' to ''$WINETRICKS_WORKDIR/wine-4.17/'" ;}
+  [ ! -e "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version/appimagetool.svg" ] && { cp "$wineappimagebuilder_workdir/squashfs-root/appimagetool.svg" "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version/" || die "Unable to copy '$wineappimagebuilder_workdir/squashfs-root/appimagetool.svg' to '$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version/'" ;}
   printf '%s\n' \
     '[Desktop Entry]' \
     'Type=Application' \
@@ -13344,13 +13410,16 @@ load_wineappimagebuilder()
     'Icon=appimagetool' \
     'Categories=Development;' \
     'Terminal=true' \
-  > "$WINETRICKS_WORKDIR/wine-4.17/appimagetool.desktop"
+  > "$wineappimagebuilder_workdir/$wineappimagebuilder_wine_version/appimagetool.desktop"
 
   (
-    export ARCH='x86_64'
-    [ -e "$WINETRICKS_WORKDIR/squashfs-root/AppRun" ] && w_try "$WINETRICKS_WORKDIR/squashfs-root/AppRun" -u "gh-releases-zsync|$USER|Wine_Appimage|winetricks|wine-*winetricks.AppImage.zsync" "/home/kreyren/testing_wine/wine-4.17/" "$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage"
+    [ "$WINEARCH" = "win64" ] && export ARCH='x86_64'
+    [ "$WINEARCH" = "win32" ] && export ARCH='x86'
+    [ -e "$wineappimagebuilder_workdir/squashfs-root/AppRun" ] && w_try "$wineappimagebuilder_workdir/squashfs-root/AppRun" -u "gh-releases-zsync|$USER|Wine_Appimage|winetricks|wine-*winetricks.AppImage.zsync" "/home/kreyren/testing_wine/$wineappimagebuilder_wine_version/" "$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage"
   )
 }
+
+#----------------------------------------------------------------
 
 #######################
 # apps
