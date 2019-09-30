@@ -266,7 +266,7 @@ w_warn()
 w_debug()
 {
     # shellcheck disable=SC2154
-    [ -n "$debug" ] && printf 'DEBUG: %s/n' "$@"
+    [ -n "$debug" ] && printf 'DEBUG: %s\n' "$@"
 }
 
 # Display warning message to stderr (since it is called inside redirected code)
@@ -13274,6 +13274,16 @@ load_wineappimagebuilder()
 {
   # Get wine source
   [ -z "$wineappimagebuilder_workdir" ] && export wineappimagebuilder_workdir="$WINETRICKS_WORKDIR"
+  [ "$wineappimagebuilder_workdir" != "$WINETRICKS_WORKDIR" ] && [ ! -e "$wineappimagebuilder_workdir" ] && mkdir "$wineappimagebuilder_workdir"
+  [ -z "$WINEARCH" ] && case "$(uname -m)" in
+    x86_64)
+      export WINEARCH="win64"
+    ;;
+    x86)
+      export WINEARCH="win32"
+    ;;
+    *) w_die "Unexpected output of 'uname -m' ($(uname -m)) was provided for WINEARCH logic"
+  esac
 
   # TODO: Always use latest if none is selected
   [ -z "$wineappimagebuilder_wine_version" ] && export wineappimagebuilder_wine_version="wine-4.17"
@@ -13281,11 +13291,15 @@ load_wineappimagebuilder()
   # Logic to fetch expected WINE version
   case "$wineappimagebuilder_wine_version" in
     # Attempt to provide future compatibility
-    [3-9].0*)
-      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/${wineappimagebuilder_wine_version:5:-3}.0/$wineappimagebuilder_wine_version.tar.xz"
-    ;;
-    [3-9].[0-9]*)
-      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/${wineappimagebuilder_wine_version:5:-3}.x/$wineappimagebuilder_wine_version.tar.xz"
+    # wine-[3-9].0*)
+    #   [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/${wineappimagebuilder_wine_version:5:-3}.0/$wineappimagebuilder_wine_version.tar.xz"
+    # ;;
+    # wine-[3-9].[0-9]*)
+    #   [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/${wineappimagebuilder_wine_version:5:-3}.x/$wineappimagebuilder_wine_version.tar.xz"
+    # ;;
+    # Testing
+    wine-4.17)
+      [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/4.x/$wineappimagebuilder_wine_version.tar.xz"
     ;;
     # Cherrypicked
     wine-1.9.[0-9]|wine-1.9.[0-9][0-9])
@@ -13303,7 +13317,7 @@ load_wineappimagebuilder()
     wine-1.5.[0-9]|wine-1.5.[0-9][0-9])
       [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.5/$wineappimagebuilder_wine_version.tar.xz"
     ;;
-    wine-1.4.[0-9]|wine-1.4.[0-9][0-9]||wine-1.4.[0-9]-rc*|wine-1.4.[0-9][0-9]-rc*)
+    wine-1.4.[0-9]|wine-1.4.[0-9][0-9]|wine-1.4.[0-9]-rc*|wine-1.4.[0-9][0-9]-rc*)
       [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.4/$wineappimagebuilder_wine_version.tar.xz"
     ;;
     wine-1.3.[0-9]|wine-1.3.[0-9][0-9])
@@ -13321,7 +13335,7 @@ load_wineappimagebuilder()
     wine-1.1.[0-9]|wine-1.1.[0-9][0-9])
       [ ! -e "$W_CACHE/$W_PACKAGE/$wineappimagebuilder_wine_version.tar.xz" ] && w_download "https://dl.winehq.org/wine/source/1.0/$wineappimagebuilder_wine_version.tar.xz"
     ;;
-    *) w_die "wineappimagebuilder doesn't support '$1' in wineappimagebuilder_wine_version variable"
+    *) w_die "wineappimagebuilder doesn't support '$wineappimagebuilder_wine_version' in 'wineappimagebuilder_wine_version' variable"
   esac
   # Credit: https://stackoverflow.com/a/18963118
 
@@ -13415,7 +13429,9 @@ load_wineappimagebuilder()
   (
     [ "$WINEARCH" = "win64" ] && export ARCH='x86_64'
     [ "$WINEARCH" = "win32" ] && export ARCH='x86'
-    [ -e "$wineappimagebuilder_workdir/squashfs-root/AppRun" ] && w_try "$wineappimagebuilder_workdir/squashfs-root/AppRun" -u "gh-releases-zsync|$USER|Wine_Appimage|winetricks|wine-*winetricks.AppImage.zsync" "/home/kreyren/testing_wine/$wineappimagebuilder_wine_version/" "$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage"
+    if [ ! -e "$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage" ]; then
+      [ -e "$wineappimagebuilder_workdir/squashfs-root/AppRun" ] && w_try "$wineappimagebuilder_workdir/squashfs-root/AppRun" -u "gh-releases-zsync|$USER|Wine_Appimage|winetricks|wine-*winetricks.AppImage.zsync" "/home/kreyren/testing_wine/$wineappimagebuilder_wine_version/" "$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage"
+    fi
   )
 }
 
@@ -18335,19 +18351,27 @@ load_mtg_arena()
   if w_workaround_wine_bug 45546; then
     if [ -n "$WINETRICKS_BUILD_WINE" ]; then
       w_warn "We are about to build a wine from source and package it in AppImage"
-      wineappimagebuilder_patches()
-      {
+      wineappimagebuilder_patches() {
         w_download "https://bugs.winehq.org/attachment.cgi?id=62956" '' "$W_CACHE/$W_PACKAGE/62956.diff"
-        patch "$WINETRICKS_WORKDIR/wine-4.17/dlls/ntdll/thread.c" "$W_CACHE/$W_PACKAGE/62956.diff" || w_die "Failed to apply patch"
+
+        if ! grep -qF "for (i = 0; i < 2000; i++)" "$wineappimagebuilder_workdir/wine-4.17/dlls/ntdll/thread.c"; then
+          patch "$wineappimagebuilder_workdir/wine-4.17/dlls/ntdll/thread.c" "$W_CACHE/$W_PACKAGE/62956.diff" || w_die "Failed to apply patch in '$wineappimagebuilder_workdir/wine-4.17/dlls/ntdll/thread.c'"
+        elif grep -qF "for (i = 0; i < 2000; i++)" "$wineappimagebuilder_workdir/wine-4.17/dlls/ntdll/thread.c"; then
+          w_debug "Patch for 45546 is already applied"
+        else w_die "Unexpected output in wineappimagebuilder_patches function"
+        fi
       }
-      wineappimagebuilder
+      load_wineappimagebuilder
     elif [ -z "$WINETRICKS_BUILD_WINE" ]; then
       w_download "https://github.com/Kreyren/kreytricks/releases/download/7f230d2/MTGA.AppImage"
     fi
-    [ "$WINE" != "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ] || [ "$WINE" != "$W_CACHE/$W_PACKAGE/mtg_arena.AppImage" ] && w_die "This installer requires patched wine named MTGA.AppImage' or 'mtg_arena.AppImage' from '$W_CACHE/$W_PACKAGE/' provide this path to the WINE variable and execute the script again. (You can also blacklist winebug 45546)"
+
+    # Sanitycheck for applied patches
+    [ "$WINE" != "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ] && [ "$WINE" != "$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage" ] && w_die "This installer requires patched wine named MTGA.AppImage' or '$W_PACKAGE.AppImage' from '$W_CACHE/$W_PACKAGE/' provide this path to the WINE variable and execute the script again. (You can also blacklist winebug 45546)"
   fi
 
-  (WINEDEBUG="fixme-all" w_try "$WINE" msiexec /i "${W_CACHE}/${W_PACKAGE}/${file1}")
+  w_warn "It may take few seconds for installer to launch (max 50sec)"
+  (WINEDEBUG="fixme-all" w_try "$WINE" msiexec /i "$W_CACHE/$W_PACKAGE/$file1")
 }
 
 #----------------------------------------------------------------
