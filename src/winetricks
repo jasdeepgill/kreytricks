@@ -539,7 +539,7 @@ w_try_regedit32()
 {
     # on windows, doesn't work without cmd /c
     case "$W_PLATFORM" in
-        windows_cmd|wine_cmd) cmdc="cmd /c";;
+        windows_cygwin|windows_windows|wine_cmd) cmdc="cmd /c";;
         *) unset cmdc ;;
     esac
 
@@ -551,7 +551,7 @@ w_try_regedit64()
 {
     # on windows, doesn't work without cmd /c
     case "$W_PLATFORM" in
-        windows_cmd|wine_cmd) cmdc="cmd /c";;
+        windows_cygwin|windows_windows|wine_cmd) cmdc="cmd /c";;
         *) unset cmdc ;;
     esac
 
@@ -706,7 +706,7 @@ winetricks_wintounix()
 w_pathconv()
 {
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin|windows_windows)
             # for some reason, cygpath turns some spaces into newlines?!
             cygpath "$@" | tr '\012' '\040' | sed 's/ $//'
             ;;
@@ -1811,7 +1811,7 @@ _EOF_
 w_skip_windows()
 {
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin|windows_windows)
             echo "Skipping operation '$1' on Windows"
             return 0
             ;;
@@ -2688,7 +2688,7 @@ w_metadata()
 
     # Do sanity check unless running on Cygwin, where it's way too slow.
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin|windows_windows)
             ;;
         *)
             if grep '[^"]$' "$file"; then
@@ -2780,7 +2780,7 @@ w_do_call()
 
         # If needed, set the app's wineprefix
         case "$W_PLATFORM" in
-            windows_cmd|wine_cmd) ;;
+            windows_cygwin|windows_windows|wine_cmd) ;;
             *)
                 # shellcheck disable=SC2154
                 case "${category}-${WINETRICKS_OPT_SHAREDPREFIX}" in
@@ -3075,20 +3075,67 @@ winetricks_get_sha256sum_prog() {
     fi
 }
 
+# Get running platform in W_PLATFORM and return it in a form of [nix|windows]_[kernel_used]
 winetricks_get_platform()
 {
-    if [ "${OS}" = "Windows_NT" ]; then
-        if [ -n "${WINELOADERNOEXEC}" ]; then
-            # Windows/Cygwin
-            export W_PLATFORM="windows_cmd"
-        else
-            # wineconsole/cmd under wine
-            export W_PLATFORM="wine_cmd"
-        fi
-    else
-        # Normal Unix shell
-        export W_PLATFORM="wine"
-    fi
+  # Linux - `uname` returns 'GNU/Linux'
+  if [ "$(uname)" = "Linux" ]; then
+    export W_PLATFORM="nix_linux"
+    printf "%s\n" "$W_PLATFORM"
+    return 0
+
+  # FreeBSD - `uname` returns 'FreeBSD'
+  elif [ "$(uname)" = "FreeBSD" ]; then
+    export W_PLATFORM="nix_freebsd"
+    printf "%s\n" "$W_PLATFORM"
+    return 0
+
+  # Redox - `uname` returns 'Redox'
+  elif [ "$(uname)" = "Redox" ]; then
+    export W_PLATFORM="nix_redox"
+    printf "%s\n" "$W_PLATFORM"
+    return 0
+
+  # Cygwin - `uname -o` returns 'Cygwin'
+  elif [ "$(uname -o)" = "Cygwin" ]; then
+    export W_PLATFORM="windows_cygwin"
+    printf "%s\n" "$W_PLATFORM"
+    return 0
+
+  # MacOS - `uname` returns 'Darwin'
+  elif [ "$(uname)" = "Darwin" ]; then
+    export W_PLATFORM="nix_darwin"
+    printf "%s\n" "$W_PLATFORM"
+    return 0
+
+  # Windows - Impossible to get?
+  elif [ "$(uname)" = "Windows" ]; then
+    w_warn "How did you execute POSIX shell on native Windows? File an issue for compatibility"
+    export W_PLATFORM="windows_windows"
+    printf "%s\n" "$W_PLATFORM"
+    return 0
+
+  # Vairable that is present in winecmd/cmd
+  # FIXME: Is this required? There is no way to actually get this variable from bash? (Added since legacy is using it)
+  # Possible false trigger on Windows_NT
+  elif [ "$OS" = "Windows_NT" ] && [ -z "$(uname)" ]; then
+    export W_PLATFORM="wine_cmd"
+    printf "%s\n" "$W_PLATFORM"
+    return 0
+
+  else
+   # WSL - `uname -r` returns `4.4.0-18362-Microsoft` where 4.4.0 is kernel version and 18362 windows build(?)
+   ## $OS is blank on WSL
+   case "$(uname -r)" in
+     *-Microsoft)
+      export W_PLATFORM="windows_wsl"
+      printf "%s\n" "$W_PLATFORM"
+      return 0
+   esac
+  fi
+
+  # Logic-check
+  [ -z "$W_PLATFORM" ] && w_die "Function winetricks_get_platform is unable to get W_PLATFORM variable"
 }
 
 winetricks_latest_version_check()
@@ -4100,7 +4147,7 @@ winetricks_is_installed()
     fi
 
     case "$W_PLATFORM" in
-        windows_cmd|wine_cmd)
+        windows_cygwin|windows_windows|wine_cmd)
             # On Windows, there's no wineprefix, just check if file's there
             _W_file_unix="$(w_pathconv -u "$_W_file")"
             if test -f "$_W_file_unix"; then
@@ -4862,7 +4909,7 @@ winetricks_set_wineprefix()
     esac
 
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin|windows_windows)
             W_DRIVE_C="/cygdrive/c" ;;
         *)
             W_DRIVE_C="$WINEPREFIX/dosdevices/c:" ;;
@@ -4881,7 +4928,7 @@ winetricks_set_wineprefix()
     fi
 
     case "$W_PLATFORM" in
-        "windows_cmd|wine_cmd") W_CACHE_WIN="$(w_pathconv -w "$W_CACHE")" ;;
+        windows_cygwin|windows_windows|wine_cmd) W_CACHE_WIN="$(w_pathconv -w "$W_CACHE")" ;;
         *)
             # For case where Z: doesn't exist or / is writable (!),
             # make a drive letter for W_CACHE.  Clean it up on exit.
@@ -5144,7 +5191,7 @@ winetricks_init()
 
     # System-specific variables
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin|windows_windows)
             WINE=""
             WINE64=""
             WINE_ARCH=""
@@ -5152,7 +5199,7 @@ winetricks_init()
             WINESERVER=""
             W_DRIVE_C="C:/"
             ;;
-        *)
+        nix_linux|nix_freebsd|nix_redox|nix_darwin)
             WINE="${WINE:-wine}"
             # Find wineserver.
             # Some distributions (Debian before wine 1.8-2) don't have it on the path.
@@ -5203,6 +5250,7 @@ winetricks_init()
                 fi
                 unset _abswine
                 ;;
+        *) w_die "Unsupported platform parsed ($W_PLATFORM)"
     esac
 
     winetricks_set_wineprefix "$1"
@@ -5403,8 +5451,6 @@ then
         *) winetricks_init ;;
     esac
 fi
-
-w_die "ping"
 
 winetricks_install_app()
 {
@@ -8244,7 +8290,7 @@ load_dotnet30()
     fi
 
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin|windows_windows)
             osver=$(cmd /c ver)
             case "$osver" in
                 *Version?6*) w_die "Vista and up bundle .NET 3.0, so you can't install it like this" ;;
@@ -8363,7 +8409,7 @@ load_dotnet35()
     fi
 
     case "$W_PLATFORM" in
-        windows_cmd) ;;
+        windows_cygwin|windows_windows) ;;
         *) w_warn "dotnet35 does not yet fully work or install on wine.  Caveat emptor." ;;
     esac
 
@@ -8417,7 +8463,7 @@ load_dotnet35sp1()
     fi
 
     case "$W_PLATFORM" in
-        windows_cmd) ;;
+        windows_cygwin|windows_windows) ;;
         *) w_warn "dotnet35sp1 does not yet fully work or install on wine.  Caveat emptor." ;;
     esac
 
@@ -8466,7 +8512,7 @@ load_dotnet40()
     w_package_warn_win64
 
     case "$W_PLATFORM" in
-        windows_cmd) ;;
+        windows_cygwin|windows_windows) ;;
         *) w_warn "dotnet40 does not yet fully work or install on wine.  Caveat emptor." ;;
     esac
 
@@ -19307,7 +19353,7 @@ load_masseffect2_demo()
 
     # Don't let self-extractor write into $W_CACHE
     case "$W_PLATFORM" in
-        windows_cmd|wine_cmd)
+        windows_cygwin|windows_windows|wine_cmd)
             cp "$W_CACHE/$W_PACKAGE/MassEffect2DemoEN.exe" "$W_TMP"
             chmod +x "$W_TMP"/MassEffect2DemoEN.exe ;;
         *)
@@ -22338,7 +22384,7 @@ winetricks_os_description()
 {
     (
         case "$W_PLATFORM" in
-            windows_cmd) echo "windows" ;;
+            windows_cygwin|windows_windows) echo "windows" ;;
             *)  echo "$WINETRICKS_WINE_VERSION" ;;
         esac
     ) | tr '\012' ' '
@@ -22396,7 +22442,7 @@ winetricks_stats_log_command()
 
     # and for the user's own reference later, when figuring out what he did
     case "$W_PLATFORM" in
-        windows_cmd) _W_LOGDIR="$W_WINDIR_UNIX"/Temp ;;
+        windows_cygwin|windows_windows) _W_LOGDIR="$W_WINDIR_UNIX"/Temp ;;
         *) _W_LOGDIR="$WINEPREFIX" ;;
     esac
 
