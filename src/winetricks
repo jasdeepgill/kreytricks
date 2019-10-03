@@ -5253,8 +5253,6 @@ winetricks_init()
         *) w_die "Unsupported platform parsed ($W_PLATFORM)"
     esac
 
-    winetricks_set_wineprefix "$1"
-
     # Whether to automate installs (0=no, 1=yes)
     winetricks_set_unattended ${W_OPT_UNATTENDED:-0}
 
