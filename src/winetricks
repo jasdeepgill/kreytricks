@@ -539,8 +539,11 @@ w_try_regedit32()
 {
     # on windows, doesn't work without cmd /c
     case "$W_PLATFORM" in
-        windows_cygwin|windows_windows|wine_cmd) cmdc="cmd /c";;
-        *) unset cmdc ;;
+        windows_cygwin|wine_cmd) cmdc="cmd /c";;
+        nix_linux|nix_freebsd|nix_darwin) unset cmdc ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in w_try_regedit32()" ;;
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in w_try_regedit32()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' parsed in w_try_regedit32()"
     esac
 
     # shellcheck disable=SC2086
@@ -549,11 +552,14 @@ w_try_regedit32()
 
 w_try_regedit64()
 {
-    # on windows, doesn't work without cmd /c
-    case "$W_PLATFORM" in
-        windows_cygwin|windows_windows|wine_cmd) cmdc="cmd /c";;
-        *) unset cmdc ;;
-    esac
+  # on windows, doesn't work without cmd /c
+  case "$W_PLATFORM" in
+      windows_cygwin|wine_cmd) cmdc="cmd /c";;
+      nix_linux|nix_freebsd|nix_darwin) unset cmdc ;;
+      nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in w_try_regedit64()" ;;
+      windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in w_try_regedit64()" ;;
+      *) w_die "Unknown platform '$W_PLATFORM' parsed in w_try_regedit64()"
+  esac
 
     # shellcheck disable=SC2086
     w_try "$WINE64" $cmdc regedit $W_UNATTENDED_SLASH_S "$@"
@@ -710,16 +716,15 @@ w_pathconv()
             # for some reason, cygpath turns some spaces into newlines?!
             cygpath "$@" | tr '\012' '\040' | sed 's/ $//'
             ;;
-        windows_windows)
-          w_die "FIXME: w_pathconv for $1 not implemented"
-        nix_redox)
-          w_die "FIXME: w_pathconv for $1 not implemented"
-        nix_linux|nix_freebsd|nix_macos)
+        windows_windows) w_die "FIXME: w_pathconv for $1 not implemented" ;;
+        nix_redox) w_die "FIXME: w_pathconv for $1 not implemented" ;;
+        nix_linux|nix_freebsd|nix_darwin)
             case "$@" in
                 -u?c:\\*|-u?C:\\*|-u?c:/*|-u?C:/*) winetricks_wintounix "$2" ;;
                 *) winetricks_early_wine winepath "$@" ;;
             esac
         ;;
+        *) w_die "Unknown platform in w_pathconv() : $W_PLATFORM"
     esac
 }
 
@@ -2803,7 +2808,7 @@ w_do_call()
         # If needed, set the app's wineprefix
         case "$W_PLATFORM" in
             windows_cygwin|windows_windows|wine_cmd) ;;
-            *)
+            nix_linux|nix_freebsd|nix_darwin)
                 # shellcheck disable=SC2154
                 case "${category}-${WINETRICKS_OPT_SHAREDPREFIX}" in
                     apps-0|benchmarks-0|games-0)
@@ -3139,9 +3144,7 @@ winetricks_get_platform()
     printf "%s\n" "$W_PLATFORM"
     return 0
 
-  # Vairable that is present in winecmd/cmd
-  # FIXME: Is this required? There is no way to actually get this variable from bash? (Added since legacy is using it)
-  # Possible false trigger on Windows_NT
+  # WineCMD/CMD
   elif [ "$OS" = "Windows_NT" ] && [ -z "$(uname)" ]; then
     export W_PLATFORM="wine_cmd"
     printf "%s\n" "$W_PLATFORM"
@@ -3149,7 +3152,7 @@ winetricks_get_platform()
 
   else
    # WSL - `uname -r` returns `4.4.0-18362-Microsoft` where 4.4.0 is kernel version and 18362 windows build(?)
-   ## $OS is blank on WSL
+   ## $OS is blank on WSL (10/2019)
    case "$(uname -r)" in
      *-Microsoft)
       export W_PLATFORM="windows_wsl"
@@ -4935,10 +4938,13 @@ winetricks_set_wineprefix()
     esac
 
     case "$W_PLATFORM" in
-        windows_cygwin|windows_windows)
+        windows_cygwin)
             W_DRIVE_C="/cygdrive/c" ;;
-        *)
+        windows_windows) w_die "FIXME: Platform '$W_PLATFORM' is not implemtented in winetricks_set_wineprefix()" ;;
+        nix_redox) w_die "FIXME: Platform '$W_PLATFORM' is not implemtented in winetricks_set_wineprefix()" ;;
+        nix_linux|nix_freebsd|nix_darwin)
             W_DRIVE_C="$WINEPREFIX/dosdevices/c:" ;;
+        *) w_die "Unknown platform was used in winetricks_set_wineprefix()"
     esac
 
     # Kludge: use Temp instead of temp to avoid \t expansion in w_try
@@ -4955,7 +4961,7 @@ winetricks_set_wineprefix()
 
     case "$W_PLATFORM" in
         windows_cygwin|windows_windows|wine_cmd) W_CACHE_WIN="$(w_pathconv -w "$W_CACHE")" ;;
-        *)
+        nix_linux|nix_freebsd|nix_darwin)
             # For case where Z: doesn't exist or / is writable (!),
             # make a drive letter for W_CACHE.  Clean it up on exit.
             test "$WINETRICKS_CACHE_SYMLINK" && rm -f "$WINETRICKS_CACHE_SYMLINK"
@@ -5220,7 +5226,7 @@ winetricks_init()
 
     # System-specific variables
     case "$W_PLATFORM" in
-        windows_cygwin|windows_windows)
+        windows_cygwin)
             WINE=""
             WINE64=""
             WINE_ARCH=""
@@ -5228,7 +5234,8 @@ winetricks_init()
             WINESERVER=""
             W_DRIVE_C="C:/"
             ;;
-        nix_linux|nix_freebsd|nix_redox|nix_darwin)
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_init()" ;;
+        nix_linux|nix_freebsd|nix_darwin)
             WINE="${WINE:-wine}"
             # Find wineserver.
             # Some distributions (Debian before wine 1.8-2) don't have it on the path.
@@ -5279,7 +5286,8 @@ winetricks_init()
                 fi
                 unset _abswine
                 ;;
-        *) w_die "Unsupported platform parsed ($W_PLATFORM)"
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_init()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' used in winetricks_init()"
     esac
 
     # Whether to automate installs (0=no, 1=yes)
@@ -8287,13 +8295,15 @@ load_dotnet30()
         esac
     fi
 
+    # Compatibility for Windows
     case "$W_PLATFORM" in
-        windows_cygwin|windows_windows)
+        windows_cygwin)
             osver=$(cmd /c ver)
             case "$osver" in
                 *Version?6*) w_die "Vista and up bundle .NET 3.0, so you can't install it like this" ;;
             esac
             ;;
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in load_dotnet30()"
     esac
 
     # AF's workaround to avoid long pause
@@ -8406,9 +8416,11 @@ load_dotnet35()
         w_package_unsupported_win64
     fi
 
+    # Platform compatibility
     case "$W_PLATFORM" in
         windows_cygwin|windows_windows) ;;
-        *) w_warn "dotnet35 does not yet fully work or install on wine.  Caveat emptor." ;;
+        nix_linux|nix_freebsd|nix_darwin|nix_redox) w_warn "dotnet35 does not yet fully work or install on wine.  Caveat emptor." ;;
+        *) w_die "Unknown platform '$W_PLATFORM' parsed in load_dotnet35()"
     esac
 
     w_verify_cabextract_available
@@ -8462,7 +8474,8 @@ load_dotnet35sp1()
 
     case "$W_PLATFORM" in
         windows_cygwin|windows_windows) ;;
-        *) w_warn "dotnet35sp1 does not yet fully work or install on wine.  Caveat emptor." ;;
+        nix_linux|nix_freebsd|nix_darwin|nix_redox) w_warn "dotnet35sp1 does not yet fully work or install on wine.  Caveat emptor." ;;
+        *) w_die "Unknown platform parsed in load_dotnet35sp1()"
     esac
 
     w_verify_cabextract_available
@@ -8511,7 +8524,8 @@ load_dotnet40()
 
     case "$W_PLATFORM" in
         windows_cygwin|windows_windows) ;;
-        *) w_warn "dotnet40 does not yet fully work or install on wine.  Caveat emptor." ;;
+        nix_linux|nix_freebsd|nix_darwin|nix_redox) w_warn "dotnet40 does not yet fully work or install on wine.  Caveat emptor." ;;
+        *) w_die "Unknown platform '$_PLATFORM' used in load_dotnet40()"
     esac
 
     if [ "$W_ARCH" = "win64" ]; then
@@ -19357,11 +19371,14 @@ load_masseffect2_demo()
 
     # Don't let self-extractor write into $W_CACHE
     case "$W_PLATFORM" in
-        windows_cygwin|windows_windows|wine_cmd)
+        windows_cygwin|wine_cmd)
             cp "$W_CACHE/$W_PACKAGE/MassEffect2DemoEN.exe" "$W_TMP"
-            chmod +x "$W_TMP"/MassEffect2DemoEN.exe ;;
-        *)
-            ln -sf "$W_CACHE/$W_PACKAGE/MassEffect2DemoEN.exe" "$W_TMP" ;;
+            chmod +x "$W_TMP"/MassEffect2DemoEN.exe
+        ;;
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in load_masseffect2_demo()" ;;
+        nix_linux|nix_freebsd|nix_darwin) ln -sf "$W_CACHE/$W_PACKAGE/MassEffect2DemoEN.exe" "$W_TMP" ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in load_masseffect2_demo()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' parsed in load_masseffect2_demo()"
     esac
     w_try_cd "$W_TMP"
     w_ahk_do "
@@ -22384,14 +22401,11 @@ winetricks_stats_init()
 }
 
 # Retrieve a short string with the operating system name and version
+# Obsolete by winetricks_get_platform
 winetricks_os_description()
 {
-    (
-        case "$W_PLATFORM" in
-            windows_cygwin|windows_windows) echo "windows" ;;
-            *)  echo "$WINETRICKS_WINE_VERSION" ;;
-        esac
-    ) | tr '\012' ' '
+    w_warn "Function 'winetricks_os_description' is obsolete by 'winetricks_get_platform'"
+    winetricks_get_platform
 }
 
 winetricks_stats_report()
@@ -22446,8 +22460,11 @@ winetricks_stats_log_command()
 
     # and for the user's own reference later, when figuring out what he did
     case "$W_PLATFORM" in
-        windows_cygwin|windows_windows) _W_LOGDIR="$W_WINDIR_UNIX"/Temp ;;
-        *) _W_LOGDIR="$WINEPREFIX" ;;
+        windows_cygwin) _W_LOGDIR="$W_WINDIR_UNIX"/Temp ;;
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_stats_log_command()" ;;
+        nix_linux|nix_freebsd|nix_darwin) _W_LOGDIR="$WINEPREFIX" ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_stats_log_command()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' parsed in winetricks_stats_log_command()"
     esac
 
     mkdir -p "$_W_LOGDIR"
