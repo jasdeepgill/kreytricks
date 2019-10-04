@@ -706,11 +706,15 @@ winetricks_wintounix()
 w_pathconv()
 {
     case "$W_PLATFORM" in
-        windows_cygwin|windows_windows)
+        windows_cygwin)
             # for some reason, cygpath turns some spaces into newlines?!
             cygpath "$@" | tr '\012' '\040' | sed 's/ $//'
             ;;
-        *)
+        windows_windows)
+          w_die "FIXME: w_pathconv for $1 not implemented"
+        nix_redox)
+          w_die "FIXME: w_pathconv for $1 not implemented"
+        nix_linux|nix_freebsd|nix_macos)
             case "$@" in
                 -u?c:\\*|-u?C:\\*|-u?c:/*|-u?C:/*) winetricks_wintounix "$2" ;;
                 *) winetricks_early_wine winepath "$@" ;;
@@ -2646,6 +2650,22 @@ w_workaround_wine_bug()
 
 w_metadata()
 {
+  # Must initialize variables before calling w_metadata
+  if [ -z "$WINETRICKS_LIB" ]; then
+      WINETRICKS_SRCDIR="$(dirname "$0")"
+      WINETRICKS_SRCDIR="$(w_try_cd "$WINETRICKS_SRCDIR"; pwd)"
+
+      # Which GUI helper to use (none/zenity/kdialog).  See winetricks_detect_gui.
+      WINETRICKS_GUI=none
+      # Default to a shared prefix:
+      # WINETRICKS_OPT_SHAREDPREFIX=${WINETRICKS_OPT_SHAREDPREFIX:-1}
+
+      # Handle options before init, to avoid starting wine for --help or --version
+      while "$(winetricks_handle_option "$1")" ; do
+          shift
+      done
+  fi
+
     case $WINETRICKS_OPT_VERBOSE in
         2) set -x ;;
         *) set +x ;;
@@ -2688,13 +2708,15 @@ w_metadata()
 
     # Do sanity check unless running on Cygwin, where it's way too slow.
     case "$W_PLATFORM" in
-        windows_cygwin|windows_windows)
-            ;;
-        *)
+        windows_cygwin) w_warn "FIXME: Sanity check for w_metadata() is too slow, skipping.." ;;
+        windows_windows) w_die "FIXME: Platform $W_PLATFORM is not implemtented in w_metadata()" ;;
+        nix_redox) w_die "FIXME: Platform $W_PLATFORM is not implemtented in w_metadata()" ;;
+        nix_linux|nix_freebsd|nix_darwin)
             if grep '[^"]$' "$file"; then
                 w_die "bug: w_metadata $_W_md_cmd corrupt, might need forward slashes?"
             fi
-            ;;
+        ;;
+        *) w_die "Unknown W_PLATFORM detected in w_metadata()"
     esac
     unset _W_md_cmd
 
@@ -2793,6 +2815,8 @@ w_do_call()
                         ;;
                 esac
             ;;
+            nix_redox) w_die "FIXME: Platform '$W_PLATFORM' is not implemented in w_do_call()" ;;
+            *) w_die "Unknown platform detected in w_do_call() : $W_PLATFORM"
         esac
 
         test "$W_OPT_NOCLEAN" = 1 || rm -rf "$W_TMP"
@@ -4155,7 +4179,7 @@ winetricks_is_installed()
                 return 0  # installed
             fi
             ;;
-        *)
+        nix_linux|nix_freebsd|nix_darwin)
             # Compute wineprefix for this app
             case "${category}-${WINETRICKS_OPT_SHAREDPREFIX}" in
                 apps-0|benchmarks-0|games-0)
@@ -4182,6 +4206,8 @@ winetricks_is_installed()
              IFS="$_W_IFS"
             fi
             ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_is_installed()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' used in winetricks_is_installed"
     esac
     unset _W_file _W_prefix _W_IFS  # leak _W_file_unix for caller. Is this wise?
     return 1  # not installed
@@ -4944,6 +4970,8 @@ winetricks_set_wineprefix()
             done
             W_CACHE_WIN="${letter}:"
             ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_set_wineprefix()" ;;
+        *) w_die "Unknown platform ($W_PLATFORM) detected in winetricks_set_wineprefix()"
     esac
 
     W_COMMONFILES_X86_WIN="$(w_expand_env CommonProgramFiles)"
@@ -5134,7 +5162,8 @@ winetricks_init()
 
     winetricks_get_sha256sum_prog
 
-    winetricks_get_platform
+    # winetricks_get_platform got updated and in addition to W_PLATFORM export it outputs the platform which seems unexpected here
+    winetricks_get_platform 2>&1>/dev/null
 
     #---- Public Variables ----
 
@@ -5420,35 +5449,6 @@ winetricks_handle_option()
     esac
     return 0
 }
-
-# Test whether temporary directory is valid - before initialising script
-[ -d "$W_TMP_EARLY" ] || w_die "temporary directory: '$W_TMP_EARLY' ; does not exist"
-[ -w "$W_TMP_EARLY" ] || w_die "temporary directory: '$W_TMP_EARLY' ; is not user writeable"
-
-# Must initialize variables before calling w_metadata
-if ! test "$WINETRICKS_LIB"
-then
-    WINETRICKS_SRCDIR=$(dirname "$0")
-    WINETRICKS_SRCDIR=$(w_try_cd "$WINETRICKS_SRCDIR"; pwd)
-
-    # Which GUI helper to use (none/zenity/kdialog).  See winetricks_detect_gui.
-    WINETRICKS_GUI=none
-    # Default to a shared prefix:
-    # WINETRICKS_OPT_SHAREDPREFIX=${WINETRICKS_OPT_SHAREDPREFIX:-1}
-
-    # Handle options before init, to avoid starting wine for --help or --version
-    while "$(winetricks_handle_option "$1")" ; do
-        shift
-    done
-
-    # Workaround for https://github.com/Winetricks/winetricks/issues/599
-    # If --isolate is used, pass verb to winetricks_init, so it can set the wineprefix using winetricks_set_wineprefix()
-    # Otherwise, an arch mismatch between ${WINEPREFIX:-$HOME/.wine} and the prefix to be made for the isolated app would cause it to fail
-    case $WINETRICKS_OPT_SHAREDPREFIX in
-        0) winetricks_init "$1" ;;
-        *) winetricks_init ;;
-    esac
-fi
 
 winetricks_install_app()
 {
@@ -18413,6 +18413,12 @@ load_mtg_arena()
       load_wineappimagebuilder
     elif [ -z "$WINETRICKS_BUILD_WINE" ]; then
       w_download "https://github.com/Kreyren/kreytricks/releases/download/7f230d2/MTGA.AppImage"
+
+      if [ -e "$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage" ]; then export WINE="$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage"
+      elif [ -e "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ]; then export WINE="$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage"
+      elif [ ! -e "$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage" ] && [ ! -e "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ]; then w_die "Precompiled WINE wasn't downloaded"
+      else w_die "Unexpected error for workaround 45546 in WINE logic"
+      fi
     fi
 
     # Sanitycheck for applied patches
@@ -22403,7 +22409,7 @@ winetricks_stats_report()
     WINETRICKS_STATS_BREADCRUMBS=$(tr '\012' ' ' < "$WINETRICKS_WORKDIR"/breadcrumbs)
     echo "You opted in, so reporting '$WINETRICKS_STATS_BREADCRUMBS' to the winetricks maintainer so he knows which winetricks verbs get used and which don't.  Use --optout to disable future reports."
 
-    report="os=$(winetricks_os_description)&winetricks=$WINETRICKS_VERSION&breadcrumbs=$WINETRICKS_STATS_BREADCRUMBS"
+    report="os=$(winetricks_get_platform)&winetricks=$WINETRICKS_VERSION&breadcrumbs=$WINETRICKS_STATS_BREADCRUMBS"
     report="$(echo "$report" | sed 's/ /%20/g')"
 
     # Just do a HEAD request with the raw command line.
@@ -22606,6 +22612,10 @@ execute_command()
     esac
 }
 
+# Test whether temporary directory is valid - before initialising script
+[ -d "$W_TMP_EARLY" ] || w_die "temporary directory: '$W_TMP_EARLY' ; does not exist"
+[ -w "$W_TMP_EARLY" ] || w_die "temporary directory: '$W_TMP_EARLY' ; is not user writeable"
+
 if ! test "$WINETRICKS_LIB"
 then
     # If user opted out, save that preference now.
@@ -22620,6 +22630,7 @@ then
 
     case "$1" in
         die) w_die "we who are about to die salute you." ;;
+        kreyren) w_die "$WINETRICKS_LIB" ;;
         volnameof=*)
             # Debug code.  Remove later?
             # Since Linux's volname command can't handle DVDs, winetricks has its own,
