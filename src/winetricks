@@ -265,10 +265,12 @@ w_warn()
 # Output debug message to stdin if debug variable is non-zero
 w_debug()
 {
-    local w_message="$1"
+    w_message="$1"
 
     # shellcheck disable=SC2154
     [ -n "$W_DEBUG" ] && printf 'DEBUG: %s\n' "$w_message"
+
+		unset w_message
 }
 
 # Display warning message to stderr (since it is called inside redirected code)
