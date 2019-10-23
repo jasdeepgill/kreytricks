@@ -1,7 +1,7 @@
 ![kreytricks_header](/files/img/Kreytricks_header.png)
 
 # Kreytricks
-[![Build Status](https://travis-ci.org/Kreyren/kreytricks.svg?branch=master)](https://travis-ci.org/Kreyren/Kreytricks) [![License](http://img.shields.io/:license-lgpl-green.svg)](https://tldrlegal.com/license/gnu-lesser-general-public-license-v2.1-(lgpl-2.1))
+[![Build Status](https://travis-ci.org/kreytricks/kreytricks.svg?branch=master)](https://travis-ci.org/kreytricks/Kreytricks) [![License](http://img.shields.io/:license-lgpl-green.svg)](https://tldrlegal.com/license/gnu-lesser-general-public-license-v2.1-(lgpl-2.1))
 
 Contribution-focused winetricks fork
 
