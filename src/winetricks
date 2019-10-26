@@ -2821,7 +2821,7 @@ w_do_call()
 						printf '%s\n' "Creating a new shortcut in $WINEPREFIX/$installed_exe1"
 						# Generate shortcut
 						printf '%s\n' \
-								"\#!/bin/sh" \
+								"#!/bin/sh" \
 								'(' \
 								"	export WINEPREFIX=\"$WINEPREFIX\"" \
 								"	export WINEDEBUG=\"-all\"" \
