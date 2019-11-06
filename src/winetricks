@@ -20880,6 +20880,7 @@ w_metadata warcraft3 games \
 load_warcraft3()
 {
 	w_download 'https://eu.battle.net/download/getInstaller?os=win&installer=Warcraft-III-Setup.exe'
+	#w_download 'https://us.battle.net/download/getInstaller?os=win&installer=Warcraft-III-Setup.exe'
 
 	w_try $WINE "$W_CACHE/$W_PACKAGE/$file1"
 }
