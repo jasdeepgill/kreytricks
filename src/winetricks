@@ -163,12 +163,18 @@ WINETRICKS_VERSION=20190912-next
 # - Pull Requests: https://github.com/Winetricks/winetricks/pulls
 #--------------------------------------------------------------------
 
+# QA: wtf?
 # FIXME: XDG_CACHE_HOME is defined twice, clean this up
 XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 
+# QA: wtf?
 W_COUNTRY=""
+# QA: wtf?
 W_PREFIXES_ROOT="${WINE_PREFIXES:-$XDG_DATA_HOME/wineprefixes}"
+
+# Variable used in strings that are not translated
+[ -z "$WINETRICKS_IGNORE_TRANSLATE" ] && export untranslated="(translate_me)"
 
 # For temp files before $WINEPREFIX is available:
 if [ -x "$(command -v mktemp 2>/dev/null)" ] ; then
@@ -187,16 +193,16 @@ fi
 # Ask permission to continue
 w_askpermission()
 {
-    echo "------------------------------------------------------"
-    echo "$@"
-    echo "------------------------------------------------------"
+    printf '%s\n' \
+        "------------------------------------------------------" \
+        "$@" \
+        "------------------------------------------------------"
 
-    if test "$W_OPT_UNATTENDED"; then
-        _W_timeout="--timeout 5"
-    fi
+    # QA: wtf?
+    [ -n "$W_OPT_UNATTENDED" ] && _W_timeout="--timeout 5"
 
     case $WINETRICKS_GUI in
-        zenity) $WINETRICKS_GUI "$_W_timeout" --question --title=winetricks --text="$(echo "$@" | sed 's,\\\\,\\\\\\\\,g')" --no-wrap;;
+        zenity) $WINETRICKS_GUI "$_W_timeout" --question --title=winetricks --text="$(printf '%s\n' "$@" | sed 's,\\\\,\\\\\\\\,g')" --no-wrap;;
         kdialog) $WINETRICKS_GUI --title winetricks --warningcontinuecancel "$@" ;;
         none)
             if [ -n "$_W_timeout" ]; then
@@ -205,11 +211,17 @@ w_askpermission()
             else
                 printf %s "Press Y or N, then Enter: "
                 read -r response
-                test "$response" = Y || test "$response" = y
+                case $response in
+                    Y|y|yes)
+                        return 0
+                    ;;
+                    N|n|no)
+                        return 130
+                esac
             fi
     esac
 
-    if test $? -ne 0; then
+    if [ $? -ne 0 ]; then
         case $LANG in
             uk*) w_die "Операція скасована." ;;
             pl*) w_die "Anulowano operację, opuszczanie." ;;
@@ -226,17 +238,19 @@ w_info()
 {
     # If $WINETRICKS_SUPER_QUIET is set, w_info is a no-op:
     if [ -z "$WINETRICKS_SUPER_QUIET" ] ; then
-        echo "------------------------------------------------------"
-        echo "$@"
-        echo "------------------------------------------------------"
+        printf '%s\n' \
+            "------------------------------------------------------" \
+            "$@" \
+            "------------------------------------------------------"
     fi
 
     _W_timeout="--timeout 3"
 
     case $WINETRICKS_GUI in
-        zenity) $WINETRICKS_GUI "$_W_timeout" --info --title=winetricks --text="$(echo "$@" | sed 's,\\\\,\\\\\\\\,g')" --no-wrap;;
+        zenity) $WINETRICKS_GUI "$_W_timeout" --info --title=winetricks --text="$(printf '%s\n' "$@" | sed 's,\\\\,\\\\\\\\,g')" --no-wrap;;
         kdialog) $WINETRICKS_GUI --title winetricks --msgbox "$@" ;;
         none) ;;
+        *) w_die 2 "WINETRICKS_GUI value '$WINETRICKS_GUI' is not supported by w_info()"
     esac
 
     unset _W_timeout
@@ -247,19 +261,20 @@ w_warn()
 {
     # If $WINETRICKS_SUPER_QUIET is set, w_info is a no-op:
     if [ -z "$WINETRICKS_SUPER_QUIET" ] ; then
-        echo "------------------------------------------------------"
-        echo "$@"
-        echo "------------------------------------------------------"
+        printf '%s\n' \
+            "------------------------------------------------------" \
+            "$@" \
+            "------------------------------------------------------"
     fi
 
-    if test "$W_OPT_UNATTENDED"; then
-        _W_timeout="--timeout 5"
-    fi
+    # QA: wtf?
+    [ -n "$W_OPT_UNATTENDED" ] && _W_timeout="--timeout 5"
 
     case $WINETRICKS_GUI in
         zenity) $WINETRICKS_GUI "$_W_timeout" --error --title=winetricks --text="$(echo "$@" | sed 's,\\\\,\\\\\\\\,g')";;
         kdialog) $WINETRICKS_GUI --title winetricks --error "$@" ;;
         none) ;;
+        *) w_die 2 "WINETRICKS_GUI value '$WINETRICKS_GUI' is not supported by w_warn()"
     esac
 
     unset _W_timeout
@@ -269,6 +284,7 @@ w_warn()
 w_debug()
 {
     w_message="$1"
+    shift 1
 
     # shellcheck disable=SC2154
     [ -n "$W_DEBUG" ] && printf 'DEBUG: %s\n' "$w_message"
@@ -281,226 +297,249 @@ w_debug()
 # If user cancels, exit status is 1
 w_warn_cancel()
 {
-    echo "------------------------------------------------------" >&2
-    echo "$@" >&2
-    echo "------------------------------------------------------" >&2
+    printf '%s\n' \
+        "------------------------------------------------------" >&2 \
+        "$@" >&2 \
+        "------------------------------------------------------" >&2
 
-    if test "$W_OPT_UNATTENDED"; then
-        _W_timeout="--timeout 5"
-    fi
+    # QA: wtf?
+    [ -n "$W_OPT_UNATTENDED" ] && _W_timeout="--timeout 5"
 
     # Zenity has no cancel button, but will set status to 1 if you click the go-away X
     case $WINETRICKS_GUI in
-        zenity) $WINETRICKS_GUI "$_W_timeout" --error --title=winetricks --text="$(echo "$@" | sed 's,\\\\,\\\\\\\\,g')";;
+        zenity) $WINETRICKS_GUI "$_W_timeout" --error --title=winetricks --text="$(printf '%s\n' "$@" | sed 's,\\\\,\\\\\\\\,g')";;
         kdialog) $WINETRICKS_GUI --title winetricks --warningcontinuecancel "$@" ;;
         none) ;;
+        *) w_die 2 "WINETRICKS_GUI value '$WINETRICKS_GUI' is not supported by w_warn_cancel()"
     esac
 
-    # can't unset, it clears status
-}
+    # can't unset, it clears status (?)
 
+}
 # Display fatal error message depending on error code or first argument
-w_die() {
-  # Exit codes (http://tldp.org/LDP/abs/html/exitcodes.html#EXITCODESREF)
-  case "$1" in
-      0|true)
-          case $LANG in
-              en*)
-                  w_debug "Script returned true for '$*'" 1>&2
-              ;;
-              en*)
-                  w_debug "Script vrátil true pro '$*'" 1>&2
-              ;;
-              *)
-                  w_debug "Script returned true for '$*'$untranslated" 1>&2
-              ;;
-          esac
-          return 0
-      ;;
-      1|false) # False
-          if [ -n "$2" ]; then
-              case $LANG in
-                  en*)
-                      printf '%s\n' "FATAL: $2" 1>&2
-                  ;;
-                  cz*)
-                      printf '%s\n' "FATÁLNÍ: $2" 1>&2
-                  ;;
-                  *)
-                      printf '%s\n' "FATAL: $2$untranslated" 1>&2
-              esac
-              exit 1
-          elif [ -z "$2" ]; then
-              case $LANG in
-                  en*)
-                      printf '%s\n' "FATAL: Script returned 'false' for '$*'" 1>&2
-                  ;;
-                  cz*)
-                      printf '%s\n' "FATÁLNÍ: Script vrátil 'false' pro '$*'" 1>&2
-                  ;;
-                  *)
-                      printf '%s\n' "FATAL: Script returned 'false' for '$*'$untranslated" 1>&2
-              esac
-              exit 1
-          else
-              w_die 255 "die - false"
-          fi
-      ;;
-      2) # Syntax err
-          if [ -n "$2" ]; then
-              case $LANG in
-                  en)
-                      printf '%s\n' "FATAL: $2" 1>&2 1>&2
-                  ;;
-                  *)
-                      printf '%s\n' "FATAL: $2$untranslated" 1>&2
-                  ;;
-              esac
-              exit 2
-          elif [ -z "$2" ]; then
-              case $LANG in
-                  en*)
-                      printf '%s\n' "FATAL: Syntax error for '$*'" 1>&2
-                  ;;
-                  cz*)
-                      printf '%s\n' "FATAL: Syntax error for '$*'" 1>&2
-                  ;;
-                  *)
-                      printf '%s\n' "FATAL: Syntax error for '$*'$untranslated" 1>&2
-                  ;;
-              esac
-              exit 2
-          else
-              w_die 255 'w_die - syntax err'
-          fi
-      ;;
-      3) # Permission issue
-          if [ -n "$2" ]; then
-              case $LANG in
-                  en*)
-                      printf '%s\n' "FATAL: $2" 1>&2
-                  ;;
-                  cz*)
-                      printf '%s\n' "FATÁLNÍ: $2" 1>&2
-                  ;;
-                  *)
-                      printf '%s\n' "FATAL: $2$untranslated" 1>&2
-              esac
-              exit 3
-          elif [ -z "$2" ]; then
-              case $LANG in
-                  en*)
-                      printf '%s\n' "FATAL: Permission issue for '$*'" 1>&2
-                  ;;
-                  *)
-                      printf '%s\n' "FATAL: Permission issue for '$*'$untranslated" 1>&2
-              esac
-              exit 3
-          else w_die 255 'die - permission'
-          fi
-      ;;
-      32)
-          if [ -n "$2" ]; then
-              case $LANG in
-                  en*)
-                      printf '%s\n' "FATAL: $2" 1>&2
-                  ;;
-                  *)
-                      printf '%s\n' "FATAL: $2$untranslated" 1>&2
-              esac
-          elif [ -z "$2" ]; then
-              case $LANG in
-                  en*)
-                      printf '%s\n' "FATAL: 64-bit system is not supported for '$*'" 1>&2
-                  ;;
-                  *)
-                      printf '%s\n' "FATAL: 64-bit system is not supported for '$*'$untranslated" 1>&2
-              esac
-          else
-              w_die 255 'w_die 32'
-          fi
-          exit 32
-      ;;
-      64)
-          if [ -n "$2" ]; then
-              case $LANG in
-                  en*)
-                      printf '%s\n' "FATAL: $2" 1>&2
-                  ;;
-                  *)
-                      printf '%s\n' "FATAL: $2$untranslated" 1>&2
-              esac
-          elif [ -z "$2" ]; then
-              case $LANG in
-                  en*)
-                      printf '%s\n' "FATAL: 32-bit system is not supported for '$*'" 1>&2
-                  ;;
-                  *)
-                      printf '%s\n' "FATAL: 32-bit system is not supported for '$*'$untranslated" 1>&2
-              esac
-          else
-              w_die 255 'w_die 64'
-          fi
-          exit 64
-      ;;
-      126) # Not executable
-          case $LANG in
-              en*)
-                  printf '%s\n' "FATAL: Returned not executable for '$*'" 1>&2
-              ;;
-              *)
-                  printf '%s\n' "FATAL: Returned not executable for '$*'$untranslated" 1>&2
-          esac
-          exit 126
-      ;;
-      130) # Killed by user
-          case $LANG in
-              en*)
-                  printf '%s\n' "FATAL: Killed by user" 1>&2
-              ;;
-              *)
-                  printf '%s\n' "FATAL: Killed by user$untranslated" 1>&2
-          esac
-          exit 130
-      ;;
-      wtf|255) # Unexpected
-          case $LANG in
-              en*)
-                  printf '%s\n' "FATAL: Unexpected result in '$2'" 1>&2
-              ;;
-              *)
-                  printf '%s\n' "FATAL: Unexpected result in '$2'$untranslated" 1>&2
-          esac
-          exit 255
-      ;;
-      ping) # Ping for development
-          case $LANG in
-            en*)
-                printf '%s\n' "Killed by ping"
-            ;;
-            *)
-                printf '%s\n' "Killed by ping$untranslated"
-          esac
-          exit 1
-      ;;
-      *)
-          printf '%s\n' "FATAL: $*" 1>&2 ; exit 1
-  esac
+w_die()
+{
+    # Exit codes (http://tldp.org/LDP/abs/html/exitcodes.html#EXITCODESREF)
+    case "$1" in
+        0|true)
+            case $LANG in
+                en*)
+                    w_debug "Script returned true for '$*'" 1>&2
+                ;;
+                en*)
+                    w_debug "Script vrátil true pro '$*'" 1>&2
+                ;;
+                *)
+                    w_debug "Script returned true for '$*'$untranslated" 1>&2
+                ;;
+            esac
+            return 0
+        ;;
+        1|false) # False
+            if [ -n "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf '%s\n' "FATAL: $2" 1>&2
+                    ;;
+                    cz*)
+                        printf '%s\n' "FATÁLNÍ: $2" 1>&2
+                    ;;
+                    *)
+                        printf '%s\n' "FATAL: $2$untranslated" 1>&2
+                esac
+                exit 1
+            elif [ -z "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf '%s\n' "FATAL: Script returned 'false' for '$*'" 1>&2
+                    ;;
+                    cz*)
+                        printf '%s\n' "FATÁLNÍ: Script vrátil 'false' pro '$*'" 1>&2
+                    ;;
+                    *)
+                        printf '%s\n' "FATAL: Script returned 'false' for '$*'$untranslated" 1>&2
+                esac
+                exit 1
+            else
+                w_die 255 "die - false"
+            fi
+        ;;
+        2) # Syntax err
+            if [ -n "$2" ]; then
+                case $LANG in
+                    en)
+                        printf '%s\n' "FATAL: $2" 1>&2 1>&2
+                    ;;
+                    *)
+                        printf '%s\n' "FATAL: $2$untranslated" 1>&2
+                    ;;
+                esac
+                exit 2
+            elif [ -z "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf '%s\n' "FATAL: Syntax error for '$*'" 1>&2
+                    ;;
+                    cz*)
+                        printf '%s\n' "FATAL: Syntax error for '$*'" 1>&2
+                    ;;
+                    *)
+                        printf '%s\n' "FATAL: Syntax error for '$*'$untranslated" 1>&2
+                    ;;
+                esac
+                exit 2
+            else
+                w_die 255 'w_die - syntax err'
+            fi
+        ;;
+        3) # Permission issue
+            if [ -n "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf '%s\n' "FATAL: $2" 1>&2
+                    ;;
+                    cz*)
+                        printf '%s\n' "FATÁLNÍ: $2" 1>&2
+                    ;;
+                    *)
+                        printf '%s\n' "FATAL: $2$untranslated" 1>&2
+                esac
+                exit 3
+            elif [ -z "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf '%s\n' "FATAL: Permission issue for '$*'" 1>&2
+                    ;;
+                    *)
+                        printf '%s\n' "FATAL: Permission issue for '$*'$untranslated" 1>&2
+                esac
+                exit 3
+            else w_die 255 'die - permission'
+            fi
+        ;;
+        32)
+            if [ -n "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf '%s\n' "FATAL: $2" 1>&2
+                    ;;
+                    *)
+                        printf '%s\n' "FATAL: $2$untranslated" 1>&2
+                esac
+            elif [ -z "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf '%s\n' "FATAL: 64-bit system is not supported for '$*'" 1>&2
+                    ;;
+                    *)
+                        printf '%s\n' "FATAL: 64-bit system is not supported for '$*'$untranslated" 1>&2
+                esac
+            else
+                w_die 255 'w_die 32'
+            fi
+            exit 32
+        ;;
+        64)
+            if [ -n "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf '%s\n' "FATAL: $2" 1>&2
+                    ;;
+                    *)
+                        printf '%s\n' "FATAL: $2$untranslated" 1>&2
+                esac
+            elif [ -z "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf '%s\n' "FATAL: 32-bit system is not supported for '$*'" 1>&2
+                    ;;
+                    *)
+                        printf '%s\n' "FATAL: 32-bit system is not supported for '$*'$untranslated" 1>&2
+                esac
+            else
+                w_die 255 'w_die 64'
+            fi
+            exit 64
+        ;;
+        126) # Not executable
+            case $LANG in
+                en*)
+                    printf '%s\n' "FATAL: Returned not executable for '$*'" 1>&2
+                ;;
+                *)
+                    printf '%s\n' "FATAL: Returned not executable for '$*'$untranslated" 1>&2
+            esac
+            exit 126
+        ;;
+        130) # Killed by user
+            case $LANG in
+                en*)
+                    printf '%s\n' "FATAL: Killed by user" 1>&2
+                ;;
+                *)
+                    printf '%s\n' "FATAL: Killed by user$untranslated" 1>&2
+            esac
+            exit 130
+        ;;
+        wtf|255) # Unexpected
+            case $LANG in
+                en*)
+                    printf '%s\n' "FATAL: Unexpected result in '$2'" 1>&2
+                ;;
+                *)
+                    printf '%s\n' "FATAL: Unexpected result in '$2'$untranslated" 1>&2
+            esac
+            exit 255
+        ;;
+        ping) # Ping for development
+            case $LANG in
+                en*)
+                    printf '%s\n' "Killed by ping"
+                ;;
+                *)
+                    printf '%s\n' "Killed by ping$untranslated"
+            esac
+            exit 1
+        ;;
+        fixme)
+            printf '%s\n' "FIXME: $*" 1>&2 ; exit 1
+        ;;
+        *)
+            printf '%s\n' "FATAL: $*" 1>&2 ; exit 1
+    esac
 }
 
 # Kill all instances of a process in a safe way (Solaris killall kills _everything_)
 w_killall()
 {
+    target="$1"
+    [ -n "$target" ] && shift 1
+
     # shellcheck disable=SC2046,SC2086
-    kill -s KILL $(pgrep $1)
+    kill -s KILL $(pgrep "$target")
+
+    unset target
 }
 
 # Some packages don't support win32, die with an appropriate message
 # Returns 64 (for tests/winetricks-test)
 w_package_unsupported_win32()
 {
-    if [ "$W_ARCH" = "win32" ] ; then
-        w_die 64 "Package '$W_PACKAGE' does not work on 32-bit installation, use prefix with WINEARCH=win64"
+    if [ "$W_ARCH" = "win32" ]; then
+        case $LANG in
+            en*) w_die 64 "Package '$W_PACKAGE' does not work on 32-bit installation, use prefix with WINEARCH=win64" ;;
+            *) w_die 64 "Package '$W_PACKAGE' does not work on 32-bit installation, use prefix with WINEARCH=win64$untranslated" ;;
+        esac
+    elif [ "$W_ARCH" = "win64" ]; then
+        case $LANG in
+            en*) w_debug "Function 'w_package_unsupported_win32' was called on 64-bit wineprefix" ;;
+            *) w_debug "Function 'w_package_unsupported_win32' was called on 64-bit wineprefix$untranslated"
+        esac
+    else
+        case $LANG in
+            en*) w_die 255 "Unknown W_ARCH variable '$W_ARCH' has been parsed in function 'w_package_unsupported_win32'" ;;
+            *) w_die 255 "Unknown W_ARCH variable '$W_ARCH' has been parsed in function 'w_package_unsupported_win32'$untranslated"
+        esac
     fi
 }
 
@@ -509,14 +548,66 @@ w_package_broken_win64()
 {
     # Optional:
     bug_link="$1"
+    [ -n "$bug_link" ] && shift 1
 
-    if [ "$W_ARCH" = "win64" ] ; then
-        if [ -n "$1" ] ; then
-            w_die "This package ($W_PACKAGE) is broken on 64-bit Wine. Using a prefix made with WINEARCH=win32 to work around this. See: ${bug_link}"
-        else
-            w_die "This package ($W_PACKAGE) is broken on 64-bit Wine. Using a prefix made with WINEARCH=win32 to work around this."
-        fi
+    if [ "$W_ARCH" = "win64" ]; then
+        case $LANG in
+            en*) w_die "Package '$W_PACKAGE' is broken on 64-bit wineprefix $([ -n "$bug_link" ] && printf '%s\n' "See: $bug_link")" ;;
+            *) w_die "Package '$W_PACKAGE' is broken on 64-bit wineprefix $([ -n "$bug_link" ] && printf '%s\n' "See: $bug_link")$untranslated" ;;
+        esac
+    elif [ "$W_ARCH" = "win32" ]; then
+        case $LANG in
+            en*) w_debug "Function 'w_package_broken_win64' has been called on 32-bit wineprefix" ;;
+            *) w_debug "Function 'w_package_broken_win64' has been called on 32-bit wineprefix$untranslated"
+        esac
+    else
+        case $LANG in
+            en*) w_die 255 "Unknown W_ARCH variable '$W_ARCH' has been parsed in function w_package" ;;
+            *) w_die 255 "Unknown W_ARCH variable '$W_ARCH' has been parsed in function w_package$untranslated"
+        esac
     fi
+}
+
+# Abstract: Extracts any archive in specified destination
+w_extractor()
+{
+    file="$1"
+    destination="$2"
+    [ -n "$file" ] && shift 1
+
+    if [ -n "$destination" ]; then
+        shift 1
+    elif [ -z "$destination" ]; then
+        w_die 2 "Function 'w_extractor' expects two variables, but second variable destination '$destination' is blank"
+    fi
+
+    # We are expecting two arguments
+    [ -z "$destination" ] && w_die 2 ""
+
+    case $file in
+      *.zip)
+        if w_check_exec unzip; then
+            unzip -d "$destination" "$file" || w_die "w_extractor was not able to extract '$file' using unzip"
+        elif w_check_exec 7z; then
+            w_die fixme "Function w_die does not have implemented extraction for 7z to extract $file"
+        fi
+      ;;
+      *.msi)
+          w_die fixme "Function w_die does not have implemented extraction for $file"
+      ;;
+      *.tar.xz|*.tar.gz)
+          w_die fixme "Function w_die does not have implemented extraction for $file"
+      ;;
+      *.exe)
+          w_die fixme "Function w_die does not have implemented extraction for $file"
+      ;;
+      *.dl_)
+          w_die fixme "Function w_die does not have implemented extraction for $file"
+      ;;
+      *) w_die 2 "File '$file' is not supported by function w_extractor"
+    esac
+
+    unset file destination
 }
 
 # Some packages don't support win64, die with an appropriate message
@@ -528,7 +619,7 @@ w_package_unsupported_win64()
         case $LANG in
             pl*) w_warn "Ten pakiet ($W_PACKAGE) nie działa z 64-bitową instalacją. Musisz użyć prefiksu utworzonego z WINEARCH=win32." ;;
             ru*) w_warn "Данный пакет не работает в 64-битном окружении. Используйте префикс, созданный с помощью WINEARCH=win32." ;;
-            *) w_warn "This package ($W_PACKAGE) does not work on a 64-bit installation. You must use a prefix made with WINEARCH=win32." ;;
+            *) w_warn "Package '$W_PACKAGE' does not support 64-bit wineprefix" ;;
         esac
         exit 32
     fi
@@ -541,12 +632,24 @@ w_package_warn_win64()
         case $LANG in
             pl*) w_warn "Ten pakiet ($W_PACKAGE) może nie działać poprawnie z 64-bitową instalacją. Prefiks 32-bitowy może działać lepiej." ;;
             ru*) w_warn "Данный пакет может работать не полностью в 64-битном окружении. 32-битные префиксы могут работать лучше." ;;
-            *) w_warn "This package ($W_PACKAGE) may not fully work on a 64-bit installation. 32-bit prefixes may work better." ;;
+            *) w_warn "Package '$W_PACKAGE' may not work on 64-bit wineprefix" ;;
         esac
     fi
 }
 
 ### w_try and w_try wrappers ###
+
+# Execute with error checking
+# TODO: w_extractor() has to be implemented first
+# TODO: Implement in kreytricks instead of w_try and it's wrappers
+w_try_new()
+{
+    argument="$1"
+    shift 1
+
+    "$@"
+    printf '%s\n' "$?" | w_die
+}
 
 # Execute with error checking
 # Put this in front of any command that might fail
