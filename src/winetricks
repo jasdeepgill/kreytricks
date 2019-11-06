@@ -610,6 +610,41 @@ w_extractor()
     unset file destination
 }
 
+# Generate yaml file for lutris to run kreytricks
+# Affected by https://github.com/lutris/lutris/issues/2333
+w_lutris_installer()
+{
+    if ! w_check_exec lutris; then
+        w_die 1 "Lutris is not executable on this system, can not be used as frontend"
+    elif w_check_exec lutris; then
+        w_debug "Lutris is executable on this environment"
+    fi
+
+    # Generate yaml file and pipe it to lutris
+    printf '%s\n' \
+        "name: $title" \
+        'game_slug: my-game' \
+        'version: Installer' \
+        'slug: my-game-installer' \
+        'runner: linux'
+        '' \
+        'script:' \
+        '  files:' \
+        '  - kreytricks: https://raw.githubusercontent.com/Kreytricks/kreytricks/master/src/winetricks' \
+        '  game:' \
+        "    arch: $([ -n "$W_ARCH" ] && printf '%s\n' "$W_ARCH" || w_die "Variable W_ARCH is blank which is unexpected")" \
+        "    $([ -n "$installed_exe1" ] && printf '%s\n' "exe: $installed_exe1" || w_die "Variable installed_exe1 is blank, cannot be exported for lutris")" \
+        "    prefix: $WINEPREFIX" \
+        '  installer:' \
+        '    - chmodx: kreytricks' \
+        '    - execute:' \
+        '      file: kreytricks' \
+        '      description: Executing kreytricks for $W_Package' \
+        "      args: lutris $W_PACKAGE" \
+        '    system:' \
+        '      terminal: true' | lutris -i
+}
+
 # Some packages don't support win64, die with an appropriate message
 # Note: this is for packages that natively don't support win64, not packages that are broken on wine64, for that, use w_package_broken_win64()
 # Returns 32 (for tests/winetricks-test)
