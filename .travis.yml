@@ -1,7 +1,8 @@
 language: shell
 os:
   - linux
-  - osx
+# Disable OSX because it takes forever
+#  - osx
 sudo: required
 dist: bionic
 
