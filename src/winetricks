@@ -20867,6 +20867,25 @@ load_ut3()
 
 #----------------------------------------------------------------
 
+# TODO: Make a metadata
+
+w_metadata warcraft3 games \
+    title="Warcratt3" \
+    publisher="2D Boy" \
+    year="2008" \
+    media="download" \
+    file1="Warcraft-III-Setup.exe" \
+    installed_exe1="$W_PROGRAMS_X86_WIN/WorldOfGooDemo/WorldOfGoo.exe"
+
+load_warcraft3()
+{
+	w_download 'https://eu.battle.net/download/getInstaller?os=win&installer=Warcraft-III-Setup.exe'
+
+	w_try $WINE "$W_CACHE/$W_PACKAGE/$file1"
+}
+
+#----------------------------------------------------------------
+
 w_metadata wog games \
     title="World of Goo Demo" \
     publisher="2D Boy" \
