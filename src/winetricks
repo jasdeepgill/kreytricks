@@ -188,6 +188,13 @@ fi
 # Export translate warning
 [ -z "$WINETRICKS_NO_LANG_WARNS" ] && export untranslated=" (FIXME: Not translated in $LANG)"
 
+# Export W_FIXME messages by default
+if [ -z "$WINETRICKS_NO_FIXME" ]; then
+    unset W_FIXME
+elif [ -z "$WINETRICKS_NO_FIXME" ]; then
+    W_FIXME=1
+fi
+
 #---- Public Functions ----
 
 # Ask permission to continue
@@ -288,6 +295,21 @@ w_debug()
 
     # shellcheck disable=SC2154
     [ -n "$W_DEBUG" ] && printf 'DEBUG: %s\n' "$w_message"
+
+    unset w_message
+}
+
+# Output fixme message in stdin if W_FIXME variable it set
+w_fixme()
+{
+    w_message="$1"
+    if [ -n "$w_message" ]; then
+        shift 1
+    elif [ -z "$w_message" ]; then
+        w_die bug "w_fixme was parsed without any value"
+    fi
+
+    [ -n "$W_FIXME" ] && printf '%s\n' "FIXME: $w_message"
 
     unset w_message
 }
