@@ -291,7 +291,11 @@ w_warn()
 w_debug()
 {
     w_message="$1"
-    shift 1
+    if [ -n "$w_message" ]; then
+        shift 1
+    elif [ -z "$w_message" ]; then
+        w_die bug "w_debug was parsed without any value"
+    fi
 
     # shellcheck disable=SC2154
     [ -n "$W_DEBUG" ] && printf 'DEBUG: %s\n' "$w_message"
