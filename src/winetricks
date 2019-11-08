@@ -612,11 +612,11 @@ w_extractor()
 
     case $file in
       *.zip)
-        if w_check_exec unzip; then
-            unzip -d "$destination" "$file" || w_die "w_extractor was not able to extract '$file' using unzip"
-        elif w_check_exec 7z; then
-            w_die fixme "Function w_die does not have implemented extraction for 7z to extract $file"
-        fi
+          if w_check_exec unzip; then
+              unzip -d "$destination" "$file" || w_die "w_extractor was not able to extract '$file' using unzip"
+          elif w_check_exec 7z; then
+              w_die fixme "Function w_die does not have implemented extraction for 7z to extract $file"
+          fi
       ;;
       *.msi)
           w_die fixme "Function w_die does not have implemented extraction for $file"
