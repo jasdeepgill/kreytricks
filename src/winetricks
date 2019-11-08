@@ -8470,19 +8470,24 @@ w_metadata dotnet11 dlls \
 
 load_dotnet11()
 {
-    # The installer itself doesn't support 64-bit
+    # The installer itself doesn't support 64-bit (?)
+    w_fixme "Verb dotnet11 is using 'w_package_unsupported_win64' which doesn't have reference"
     w_package_unsupported_win64
 
     # https://www.microsoft.com/en-us/download/details.aspx?id=26
     w_download https://download.microsoft.com/download/a/a/c/aac39226-8825-44ce-90e3-bf8203e74006/dotnetfx.exe ba0e58ec93f2ffd54fc7c627eeca9502e11ab3c6fc85dcbeff113bd61d995bce
 
+    # Removing mono since we are replacing mono libs with dotnet
     w_call remove_mono
+
+    w_fixme "Verb dotnet11 is calling 'corefonts' which doesn't have explanation"
     w_call corefonts
+
+    w_fixme "Verb dotnet11 is calling 'fontfix' which doesn't have explanation"
     w_call fontfix
 
-    w_try_cd "$W_CACHE/$W_PACKAGE"
     # Use builtin regsvcs.exe to work around https://bugs.winehq.org/show_bug.cgi?id=25120
-    if test $W_OPT_UNATTENDED; then
+    if [ -n "$W_OPT_UNATTENDED" ];then
         WINEDLLOVERRIDES="regsvcs.exe=b" w_ahk_do "
             SetTitleMatchMode, 2
             run, dotnetfx.exe /q /C:\"install /q\"
@@ -8503,10 +8508,13 @@ load_dotnet11()
                 }
             }
         "
+    elif [ -z "$W_OPT_UNATTENDED" ]; then
+        WINEDLLOVERRIDES="regsvcs.exe=b" w_try "$WINE" "$W_CACHE/$W_PACKAGE/dotnetfx.exe"
     else
-        WINEDLLOVERRIDES="regsvcs.exe=b" w_try "$WINE" dotnetfx.exe
+        w_die 255 "dotnet11 - W_OPT_UNATTENDED"
     fi
 
+    w_fixme "Verb dotnet11 is using variable 'W_NGEN_CMD' which doesn't have explanation"
     W_NGEN_CMD="w_try $WINE $W_DRIVE_C/windows/Microsoft.NET/Framework/v1.1.4322/ngen.exe executequeueditems"
 }
 
