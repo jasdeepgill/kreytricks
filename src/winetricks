@@ -8535,39 +8535,48 @@ w_metadata dotnet11sp1 dlls \
 
 load_dotnet11sp1()
 {
-    # The installer itself doesn't support 64-bit
+    # The installer itself doesn't support 64-bit (?)
+    w_fixme "Verb dotnet11sp1 is using 'w_package_unsupported_win64' which doesn't have reference"
     w_package_unsupported_win64
 
     w_download https://download.microsoft.com/download/8/b/4/8b4addd8-e957-4dea-bdb8-c4e00af5b94b/NDP1.1sp1-KB867460-X86.exe 2c0a35409ff0873cfa28b70b8224e9aca2362241c1f0ed6f622fef8d4722fd9a
 
+    # Removing mono since we are replacing mono libs with dotnet
     w_call remove_mono
+
+    w_fixme "Verb dotnet11sp1 is calling 'dotnet11' which doesn't have explanation"
     w_call dotnet11
 
-    w_try_cd "$W_CACHE/$W_PACKAGE"
     # Use builtin regsvcs.exe to work around https://bugs.winehq.org/show_bug.cgi?id=25120
-    if test $W_OPT_UNATTENDED; then
-        WINEDLLOVERRIDES="regsvcs.exe=b" w_ahk_do "
-            SetTitleMatchMode, 2
-            run, NDP1.1sp1-KB867460-X86.exe /q /C:"install /q"
+    if w_workaround_wine_bug 25120; then
+      if [ -n "$W_OPT_UNATTENDED" ]; then
+          WINEDLLOVERRIDES="regsvcs.exe=b" w_ahk_do "
+              SetTitleMatchMode, 2
+              run, NDP1.1sp1-KB867460-X86.exe /q /C:"install /q"
 
-            Loop
-            {
-                sleep 1000
-                ifwinexist, Fatal error, Failed to delay load library
-                {
-                    WinClose, Fatal error, Failed to delay load library
-                    continue
-                }
-                Process, exist, dotnetfx.exe
-                dotnet_pid = %ErrorLevel%  ; Save the value immediately since ErrorLevel is often changed.
-                if dotnet_pid = 0
-                {
-                    break
-                }
-            }
-        "
+              Loop
+              {
+                  sleep 1000
+                  ifwinexist, Fatal error, Failed to delay load library
+                  {
+                      WinClose, Fatal error, Failed to delay load library
+                      continue
+                  }
+                  Process, exist, dotnetfx.exe
+                  dotnet_pid = %ErrorLevel%  ; Save the value immediately since ErrorLevel is often changed.
+                  if dotnet_pid = 0
+                  {
+                      break
+                  }
+              }
+          "
+      else
+          WINEDLLOVERRIDES="regsvcs.exe=b" w_try "$WINE" "$W_CACHE/$W_PACKAGE/NDP1.1sp1-KB867460-X86.exe"
+      fi
+    elif ! w_workaround_wine_bug 25120; then
+        w_debug "Not affected by winebug 25120, not seting regsvcs on builtin"
     else
-        WINEDLLOVERRIDES="regsvcs.exe=b" w_try "$WINE" "$W_CACHE"/dotnet11sp1/NDP1.1sp1-KB867460-X86.exe
+        w_die 255 "dotnet11sp1 - W_OPT_UNATTENDED"
     fi
 
     W_NGEN_CMD="w_try $WINE $W_DRIVE_C/windows/Microsoft.NET/Framework/v1.1.4322/ngen.exe executequeueditems"
