@@ -8600,7 +8600,10 @@ w_metadata dotnet20 dlls \
 
 load_dotnet20()
 {
+    # Removing mono since we are replacing mono libs with dotnet
     w_call remove_mono
+
+    w_fixme "Verb dotnet20 is using 'w_call fontfix' which doesn't have reference"
     w_call fontfix
 
     if [ "$W_ARCH" = "win32" ]; then
@@ -8608,12 +8611,18 @@ load_dotnet20()
         w_download https://download.lenovo.com/ibmdl/pub/pc/pccbbs/thinkvantage_en/dotnetfx.exe 46693d9b74d12454d117cc61ff2e9481cabb100b4d74eb5367d3cf88b89a0e71
 
         # Needed for https://bugs.winehq.org/show_bug.cgi?id=12401
-        w_set_winver win2k
+        w_fixme "Set wine version for dotnetN20 since winebug 12401 is staged"
+        if w_workaround_wine_bug 12401; then
+            w_fixme "dotnet20 is using win2k environment wineprefix-wide, set this per executable only"
+            w_set_winver win2k
+        elif ! w_workaround_wine_bug 12401; then
+            w_debug "Verb dotnet20 is not affected by winebug 12401, not seting windows environment on win2k"
+        fi
 
-        # if dotnet11 if installed there is a warning dialog, but it still verifies
-        # dotnet11 doesn't work on 64-bit, so no need to run there
-        w_try_cd "$W_CACHE/$W_PACKAGE"
-        if [ -n "${W_OPT_UNATTENDED}" ]; then
+        # if dotnet11 if installed there is a warning dialog, but it still verifies (?)
+        # dotnet11 doesn't work on 64-bit, so no need to run there (?)
+        w_fixme "dotnet11 doesn't work on 64-bit, reference needed"
+        if [ -n "$W_OPT_UNATTENDED" ]; then
             w_ahk_do "
                 SetTitleMatchMode, 2
                 ; FIXME: this isn't silent?
@@ -8637,18 +8646,38 @@ load_dotnet20()
                 }
             "
         else
-            "$WINE" dotnetfx.exe ${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}
+            "$WINE" "$W_CACHE/$W_PACKAGE/$file1" "${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}"
             status=$?
         fi
 
         case $status in
-            0) ;;
-            105) echo "exit status $status - normal, user selected 'restart now'" ;;
-            194) echo "exit status $status - normal, user selected 'restart later'" ;;
-            *) w_die "exit status $status - $W_PACKAGE installation failed" ;;
+            0)
+                case $LANG in
+                    en*) w_debug "File $file1 used in dotnet20 verb returned true" ;;
+                    *) w_debug "File $file1 used in dotnet20 verb returned true$untranslated"
+                esac
+            ;;
+            105)
+                case $LANG in
+                    en*) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart now' which is ignored by wine" ;;
+                    *) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart now' which is ignored by wine$untranslated" ;;
+                esac
+            ;;
+            194)
+                case $LANG in
+                    en*) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart later' which is normal" ;;
+                    *) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart later' which is normal$untranslated"
+                esac
+            ;;
+            *)
+                case $LANG in
+                    en*) w_die "File $file1 returned $status in verb dotnet20 which is unexpected, please file a bug with steps to reproduce" ;;
+                    *) w_die "File $file1 returned $status in verb dotnet20 which is unexpected, please file a bug with steps to reproduce$untranslated"
+                esac
         esac
 
-        w_set_winver 'default'
+        # TODO: remove once FIXME above is resolved (w_set_winver win2k)
+        w_set_winver default
 
         # We can't stop installing dotnet20 in win2k mode until Wine supports
         # reparse/junction points
@@ -8656,13 +8685,16 @@ load_dotnet20()
         # so for now just remove the bogus msvc*80.dll files it installs.
         # See also https://bugs.winehq.org/show_bug.cgi?id=16577
         # This affects Victoria 2 demo, see https://forum.paradoxplaza.com/forum/showthread.php?p=11523967
-        rm -f "$W_SYSTEM32_DLLS"/msvc?80.dll
+        w_fixme "Verb dotnet20 is using 'w_workaround_wine_bug 10467' which doesn't have selected wine versions"
+        if w_workaround_wine_bug 10467; then
+            w_warn "Affected by winebug 10467, removing file '$W_SYSTEM32_DLLS/msvc?80.dll'"
+            w_try rm -f "$W_SYSTEM32_DLLS/msvc?80.dll"
+        fi
     elif [ "$W_ARCH" = "win64" ]; then
         w_download https://download.microsoft.com/download/a/3/f/a3f1bf98-18f3-4036-9b68-8e6de530ce0a/NetFx64.exe 7ea86dca8eeaedcaa4a17370547ca2cea9e9b6774972b8e03d2cb1fb0e798669
 
-        # validates successfully in win7 mode wine-3.19, so not setting winversion
-        w_try_cd "$W_CACHE"/"$W_PACKAGE"
-        w_try "$WINE" NetFx64.exe ${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}
+        # validates successfully in win7 mode wine-3.19, so not setting winversion (?)
+        w_try "$WINE" "$W_CACHE/$W_PACKAGE/NetFx64.exe" "${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}"
     fi
 
     W_NGEN_CMD="w_try $WINE $W_DRIVE_C/windows/Microsoft.NET/Framework/v2.0.50727/ngen.exe executequeueditems"
