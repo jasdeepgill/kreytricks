@@ -21,3 +21,8 @@ func(){
 	something
 }
 ```
+
+### Usage of Change Directory 'cd'
+If possible use absolute path instead of changing directory
+
+Reasoning being sanitization so that verbs woudn't depend on current working directory
