@@ -743,10 +743,12 @@ w_package_warn_win64()
 w_try_new()
 {
     argument="$1"
-    shift 1
+    [ -n "$argument" ] && shift 1
 
     "$@"
     printf '%s\n' "$?" | w_die
+
+    unset argument
 }
 
 # Execute with error checking
