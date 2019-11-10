@@ -602,6 +602,8 @@ w_extractor()
     file="$1"
     destdir="$2"
 
+    w_fixme "Implement a method to extract only selected files from an archive"
+
     # Shift
     if [ -n "$destdir" ] && [ -n "$file" ]; then
         shift 2
@@ -6236,7 +6238,7 @@ load_cnc_ddraw()
 {
     # Note: only works if ddraw.ini contains settings for the executable
     w_download https://github.com/CnCNet/cnc-ddraw/releases/download/1.3.4.0/cnc-ddraw.zip c1f85053223ab04a573cc482b43b93a58077e928a401f3364c9dc5542ad090ae
-    w_try_unzip "$W_SYSTEM32_DLLS" "$W_CACHE/$W_PACKAGE/$file1"
+    w_extractor "$W_CACHE/$W_PACKAGE/$file1" "$W_SYSTEM32_DLLS"
 
     w_override_dlls native,builtin ddraw
 }
@@ -6262,7 +6264,7 @@ load_comctl32()
     w_download https://downloads.sourceforge.net/project/pocmin/Win%2095_98%20Controls/Win%2095_98%20Controls/CC32inst.exe d68c0cca721870aed39f5f2efd80dfb74f3db66d5f9a49e7578b18279edfa4a7
 
     w_try "$WINE" "$W_CACHE"/comctl32/cc32inst.exe "/T:$W_TMP_WIN" /c $W_UNATTENDED_SLASH_Q
-    w_try_unzip "$W_TMP" "$W_TMP"/comctl32.exe
+    w_extractor "$W_TMP"/comctl32.exe "$W_TMP"
     w_try "$WINE" "$W_TMP"/x86/50ComUpd.Exe "/T:$W_TMP_WIN" /c $W_UNATTENDED_SLASH_Q
     w_try cp "$W_TMP"/comcnt.dll "$W_SYSTEM32_DLLS"/comctl32.dll
 
@@ -6350,7 +6352,7 @@ load_binkw32()
 
     w_download http://www.down-dll.com/dll/b/__32-binkw32.dll3.0.0.0.zip 1d5efda8e4af796319b94034ba67b453cbbfddd81eb7d94fd059b40e237fa75d
 
-    w_try_unzip "$W_TMP" "$W_CACHE"/binkw32/__32-binkw32.dll3.0.0.0.zip
+    w_extractor "$W_CACHE/binkw32/__32-binkw32.dll3.0.0.0.zip" "$W_TMP"
     w_try cp "$W_TMP"/binkw32.dll "$W_SYSTEM32_DLLS"/binkw32.dll
 
     w_override_dlls native binkw32
@@ -7201,10 +7203,12 @@ load_dxsdk_nov2006()
     # dxview.dll uses mfc42u while registering
     w_call mfc42
 
-    w_try_cabextract "$W_CACHE"/dxsdk_nov2006/dxsdk_aug2006.exe
-    w_try_unzip "$W_TMP" dxsdk.exe
-    w_try_cd "$W_TMP"
-    w_try "$WINE" msiexec /i Microsoft_DirectX_SDK.msi $W_UNATTENDED_SLASH_Q
+    # Extract
+    w_extractor "$W_CACHE/$W_PACKAGE/dxsdk_aug2006.exe" "$W_TMP"
+    w_extractor "$W_TMP/dxsdk.exe" "$W_TMP"
+
+    # Execute
+    w_try "$WINE" msiexec /i "$W_TMP/Microsoft_DirectX_SDK.msi" "$W_UNATTENDED_SLASH_Q"
 }
 
 #----------------------------------------------------------------
@@ -7280,7 +7284,7 @@ helper_dxvk_d9vk()
     fi
 
     if [ "${_W_package_version}" = "master" ]; then
-        w_try_unzip "$W_TMP" "${W_CACHE}/${W_PACKAGE}/${_W_package_archive}"
+        w_extractor "$W_CACHE/$W_PACKAGE/$_W_package_archive" "$W_TMP"
     else
         w_try_cd "${W_TMP}"
         w_try tar -zxf "${W_CACHE}/${W_PACKAGE}/${_W_package_archive}"
