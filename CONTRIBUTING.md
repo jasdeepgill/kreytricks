@@ -26,3 +26,8 @@ func(){
 If possible use absolute path instead of changing directory
 
 Reasoning being sanitization so that verbs woudn't depend on current working directory
+
+### Usage of 'echo'
+`echo` is banned by kreytricks, use `printf '%s\n' 'message'` instead
+
+reasoning: https://unix.stackexchange.com/a/65819
