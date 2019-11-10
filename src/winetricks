@@ -594,46 +594,81 @@ w_package_broken_win64()
     fi
 }
 
-# Abstract: Extracts any archive in specified destination
+# Abstract: Extracts any archive in specified destdir
+# QA: Do not add a function that extracts in current working directory since that is considered as not enough sanitization in kreytricks (https://github.com/Kreytricks/kreytricks/issues/30)
 w_extractor()
 {
+    # Export arguments
     file="$1"
-    destination="$2"
-    [ -n "$file" ] && shift 1
+    destdir="$2"
 
-    if [ -n "$destination" ]; then
-        shift 1
-    elif [ -z "$destination" ]; then
-        w_die 2 "Function 'w_extractor' expects two variables, but second variable destination '$destination' is blank"
+    # Shift
+    if [ -n "$destdir" ] && [ -n "$file" ]; then
+        shift 2
+    elif [ -z "$destdir" ]; then
+        w_die 2 "Function 'w_extractor' expects two variables, but second variable destdir '$destdir' is blank"
     fi
 
     # We are expecting two arguments
-    [ -z "$destination" ] && w_die 2 ""
+    [ -z "$destdir" ] && w_die 2 "w_extractor expects two arguments, but only one was parsed: file - '$file' ; destdir - '$destdir'"
 
     case $file in
       *.zip)
           if w_check_exec unzip; then
-              unzip -d "$destination" "$file" || w_die "w_extractor was not able to extract '$file' using unzip"
+              unzip -d "$destdir" "$file" || w_die "w_extractor was not able to extract '$file' using unzip"
           elif w_check_exec 7z; then
               w_die fixme "Function w_die does not have implemented extraction for 7z to extract $file"
           fi
+          w_fixme "w_extractor .zip - Make sure that the file was extracted successfully"
       ;;
       *.msi)
           w_die fixme "Function w_die does not have implemented extraction for $file"
       ;;
-      *.tar.xz|*.tar.gz)
-          w_die fixme "Function w_die does not have implemented extraction for $file"
+      *.tar.xz)
+          if w_check_exec tar; then
+              tar -xfpJ -C "$destdir" || w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar'"
+          elif ! w_check_exec tar; then
+              w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar' - Command 'Tar' is not executable on this system"
+          else
+              w_die 255 "w_extractor .tar.xz"
+          fi
+          w_fixme "w_extractor .tar.xz - Make sure that the file was extracted successfully"
+      ;;
+      *.tar.gz)
+          if w_check_exec tar; then
+              tar -xpfz -C "$destdir" || w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar'"
+          elif ! w_check_exec tar; then
+              w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar' - Command 'Tar' is not executable on this system"
+          else
+              w_die 255 "w_extractor .tar.gz"
+          fi
+          w_fixme "w_extractor .tar.gz - Make sure that the file was extracted successfully"
       ;;
       *.exe)
-          w_die fixme "Function w_die does not have implemented extraction for $file"
+          if w_check_exec 7z; then
+              7z x "$file" -d "$destdir" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using 7z"
+              w_fixme "w_extractor .exe - implement 7z using wine if 7z is not installed on the system"
+          elif ! w_check_exec 7z && w_check_exec cabextract; then
+              cabextract -q "$@" -d "$destdir" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using cabextract"
+          else
+              w_die 255 "w_extractor .exe"
+          fi
       ;;
       *.dl_)
-          w_die fixme "Function w_die does not have implemented extraction for $file"
+          if w_check_exec 7z; then
+              7z x "$file" -d "$destdir" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using 7z"
+          elif ! w_check_exec 7z; then
+              w_fixme "Function w_extractor - Unable to extract '$file', because system 7z is not installed and using wine's 7z is not implemented"
+          else
+              w_die 255 "w_extractor .dl_"
+          fi
+          w_fixme "Function w_extractor - Implement 7z wine logic if 7z on system is not available"
+          w_fixme "Function w_extractor - Can we extract '*.dl_' files using cabextract?"
       ;;
-      *) w_die 2 "File '$file' is not supported by function w_extractor"
+      *) w_die 2 "File '$file' is not supported by function w_extractor, should it be supported? File an issue in kreytricks"
     esac
 
-    unset file destination
+    unset file destdir
 }
 
 # Generate yaml file for lutris to run kreytricks
