@@ -455,10 +455,10 @@ w_die()
             elif [ -z "$2" ]; then
                 case $LANG in
                     en*)
-                        printf '%s\n' "FATAL: 64-bit system is not supported for '$*'" 1>&2
+                        printf '%s\n' "FATAL: 64-bit system is not supported for package '$W_PACKAGE'" 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: 64-bit system is not supported for '$*'$untranslated" 1>&2
+                        printf '%s\n' "FATAL: 64-bit system is not supported for package '$W_PACKAGE'$untranslated" 1>&2
                 esac
             else
                 w_die 255 'w_die 32'
