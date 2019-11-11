@@ -727,14 +727,8 @@ w_lutris_installer()
 # Returns 32 (for tests/winetricks-test)
 w_package_unsupported_win64()
 {
-    if [ "$W_ARCH" = "win64" ] ; then
-        case $LANG in
-            pl*) w_warn "Ten pakiet ($W_PACKAGE) nie działa z 64-bitową instalacją. Musisz użyć prefiksu utworzonego z WINEARCH=win32." ;;
-            ru*) w_warn "Данный пакет не работает в 64-битном окружении. Используйте префикс, созданный с помощью WINEARCH=win32." ;;
-            *) w_warn "Package '$W_PACKAGE' does not support 64-bit wineprefix" ;;
-        esac
-        exit 32
-    fi
+    w_fixme "Replace function w_package_unsupported_win64 with function w_die 32"
+    w_die 32
 }
 
 # For packages that are not well tested or have some known issues on win64, but aren't broken
