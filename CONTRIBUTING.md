@@ -31,3 +31,27 @@ Reasoning being sanitization so that verbs woudn't depend on current working dir
 `echo` is banned by kreytricks, use `printf '%s\n' 'message'` instead
 
 reasoning: https://unix.stackexchange.com/a/65819
+
+### Usage of 'else' in if statements
+'else' syntax in if statement is allowed to be used only for `w_die 255 "hint/to/unexpected"`
+
+Reasoning being sanitization to capture unexpected results in case used if statement is not sufficient for it's usage
+
+```sh
+# Not allowed
+if [ ! -e "file" ]; then
+	  touch file
+else
+	  w_debug "file exists"
+fi
+
+# Expected
+if [ ! -e "file" ]; then
+	  w_debug "Function example expected file 'file' is not present, creating it"
+	  w_try touch file
+elif [ -e "file" ]; then
+	  w_debug "Function example expected file 'file' is already present, skipping.."
+else
+	  w_die 255 "example - logic"
+fi
+```
