@@ -15,7 +15,7 @@ This fork is true rolling-release where recommended method to sync with upstream
 The tests need `bashate`, `checkbashisms`, and `shellcheck>=0.4.4` installed.
 Makefile supports a few test targets:
 
-* check - runs './tests/winetricks-tests quick' (without first clearing $WINETRICKS_CACHE)
-* shell-checks - runs './tests/shell-checks'
-* test - runs './tests/winetricks-tests full' (and clears $WINETRICKS_CACHE first)
-* xvfb-check - runs './tests/winetricks-tests xvfb-check' (without first clearing $WINETRICKS_CACHE first)
+* `check` - runs './tests/winetricks-tests quick' (without first clearing $WINETRICKS_CACHE)
+* `shell-checks` - runs './tests/shell-checks'
+* `test` - runs './tests/winetricks-tests full' (and clears $WINETRICKS_CACHE first)
+* `xvfb-check` - runs './tests/winetricks-tests xvfb-check' (without first clearing $WINETRICKS_CACHE first)
