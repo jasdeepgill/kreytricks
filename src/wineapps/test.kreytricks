@@ -1,0 +1,18 @@
+#!/bin/sh
+
+NAME=
+METADATA=stuff
+URL=some_url
+
+src_fetch() {
+  w_download "$URL"
+
+}
+
+src_configure() {
+
+}
+
+src_install() {
+
+}
