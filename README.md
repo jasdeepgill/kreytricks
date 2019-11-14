@@ -1,7 +1,12 @@
 ![kreytricks_header](/files/img/Kreytricks_header.png)
 
 # Kreytricks
-[![Build Status](https://travis-ci.org/kreytricks/kreytricks.svg?branch=master)](https://travis-ci.org/kreytricks/Kreytricks) [![License](http://img.shields.io/:license-lgpl-green.svg)](https://tldrlegal.com/license/gnu-lesser-general-public-license-v2.1-(lgpl-2.1))
+[![linux-tests-badge](https://github.com/Kreytricks/kreytricks/workflows/Linux/badge.svg)](https://www.google.com)
+[![macosx-tests-badge](https://github.com/Kreytricks/kreytricks/workflows/MacOS/badge.svg)](https://www.google.com)
+
+(FIXME: macos tests are invalid)
+
+[![License](http://img.shields.io/:license-lgpl-green.svg)](https://tldrlegal.com/license/gnu-lesser-general-public-license-v2.1-(lgpl-2.1))
 
 Originally contribution-focused winetricks fork, now standalone fork since winetricks doesn't provide required environment for this kind of development.
 
