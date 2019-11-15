@@ -4,7 +4,7 @@
 [![linux-tests-badge](https://github.com/Kreytricks/kreytricks/workflows/Linux/badge.svg)](https://www.google.com)
 [![macosx-tests-badge](https://github.com/Kreytricks/kreytricks/workflows/MacOS/badge.svg)](https://www.google.com)
 
-(FIXME: macos tests are invalid)
+(FIXME: macos tests are invalid https://github.com/Kreytricks/kreytricks/issues/37)
 
 [![License](http://img.shields.io/:license-lgpl-green.svg)](https://tldrlegal.com/license/gnu-lesser-general-public-license-v2.1-(lgpl-2.1))
 
