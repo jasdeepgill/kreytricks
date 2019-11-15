@@ -16045,6 +16045,13 @@ load_rockstar_game_launcher()
         w_try "$WINE" "$W_CACHE/$W_PACKAGE/$file1"
     fi
 
+    # Logic for graphical issues (https://bugs.winehq.org/show_bug.cgi?id=47794)
+    if w_workaround_wine_bug 47794; then
+        w_warn "currenly affected by winebug 47794 where we currently don't know any workarounds, expect some graphical issues on the launcher"
+    elif ! w_workaround_wine_bug 47794; then
+        w_info "Verb rockstar_game_launcher userland not affected by winebug 47794, please file an issue in kreytricks if you notice any graphical issues"
+    fi
+
     # 15112019 - Using vcrun2017 since app is using it's libraries where winelibs are not sufficient
     w_fixme "We are using vcrun2017 since wine's vcrun2017 libs are not sufficient, file a winebug"
     w_call vcrun2017
