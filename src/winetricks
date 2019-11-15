@@ -16000,6 +16000,58 @@ load_uplay()
 
 #----------------------------------------------------------------
 
+w_metadata rockstar_game_launcher apps \
+    title="Rockstar Games Launcher" \
+    publisher="Rockstar Games" \
+    year="2019" \
+    media="download" \
+    file1="Rockstar-Games-Launcher.exe" \
+    installed_file1="C:/Program Files/Rockstar Games/Launcher/Launcher.exe"
+
+load_rockstar_game_launcher()
+{
+   # The installer will be updated often so can't use checksum
+    w_download https://gamedownloads.rockstargames.com/public/installer/Rockstar-Games-Launcher.exe
+
+    # Requires to be invoked on winver higher then win7
+    w_fixme "Verify if Launcher.exe is the only app that requires win10 winver"
+    w_set_app_winver Launcher.exe win10
+
+    # Apparently resolved in https://source.winehq.org/git/wine.git/commit/aa51aee1a92ddbdd39875af81b002654f8ad4fc7 (https://bugs.winehq.org/show_bug.cgi?id=48099)
+    if w_workaround_wine_bug 48099 '' ,4.18; then
+        w_warn "Affected by winebug 47912, skipping install using manuall extraction as workaround"
+        # Make sure that the expected directory is created for extraction
+        if [ ! -d "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/" ]; then
+            w_debug "Launcher folder not found, creating..."
+            w_try mkdir -p "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/"
+        elif [ -d "$WINEPREFIX/drive_c/Program Files/Rockstar/Games/Launcher/"]; then
+            w_debug "Launcher folder already exists, no need to create the folder"
+        fi
+
+        # Checking if Rockstar-Games-Launcher.exe is already extracted
+        for i in $(7z l "$W_CACHE/$W_PACKAGE/Rockstar-Games-Launcher.exe"); do
+            if [ -e "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/$i" ]; then
+                w_debug "$i Found, no need to extract, skipping..."
+            elif [ ! -e "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/$i" ]; then
+                w_debug "$i Not Found, extracting..."
+                w_try 7z x -y "$W_CACHE/$W_PACKAGE/Rockstar-Games-Launcher.exe" "-o/$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher"
+                break
+            fi
+        done
+
+        # Self-check
+        [ ! -e "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/$file1" ] && w_die 1 "Expected file '$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/$file1' is not found, assuming that used workaround is not sufficient"
+    elif ! w_workaround_wine_bug 47912; then
+        w_try "$WINE" "$W_CACHE/$W_PACKAGE/$file1"
+    fi
+
+    # 15112019 - Using vcrun2017 since app is using it's libraries where winelibs are not sufficient
+    w_fixme "We are using vcrun2017 since wine's vcrun2017 libs are not sufficient, file a winebug"
+    w_call vcrun2017
+}
+
+#----------------------------------------------------------------
+
 w_metadata utorrent apps \
     title="µTorrent 2.2.1" \
     publisher="BitTorrent" \
