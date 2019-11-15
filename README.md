@@ -16,6 +16,9 @@ This fork is true rolling-release where recommended method to sync with upstream
 - This fork is less strict and relies mostly on Travis-Cl tests, issues with merged contribution will be blames on the author if there is an issue.
 - Mistakes of new contributors are tolerated and questions related to the project will be answered, if needed project mentors are willing to invest their time in these contributors. If you are unsure what to do then the best way is to make a broken merge request and wait for review and info.
 
+## Compatibility
+Our current ethique is to support everything, so if you are able to run POSIX shell on your system, then we are going to support it.
+
 ## Tests
 The tests need `bashate`, `checkbashisms`, and `shellcheck>=0.4.4` installed.
 Makefile supports a few test targets:
