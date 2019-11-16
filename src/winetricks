@@ -5747,8 +5747,9 @@ winetricks_init()
         w_warn "Your version of wine $_wine_version_stripped is no longer supported upstream. You should upgrade to 4.x"
     fi
 
+    # Output Header informing about used wine and checksum
     if [ -z "$WINETRICKS_SUPER_QUIET" ] ; then
-        echo "Using winetricks $(winetricks_print_version) with ${WINETRICKS_ORIG_WINE_VERSION} and WINEARCH=${W_ARCH}"
+        printf '%s\n' "Using kreytricks $(winetricks_print_version) with $WINETRICKS_ORIG_WINE_VERSION and WINEARCH=$W_ARCH on WINEPREFIX=$([ -n "$WINEPREFIX" ] && { printf '%s\n' "$WINEPREFIX" ;} || printf '%s\n' "$HOME/.wine") $([ -n "$WINEDEBUG" ] && printf '%s\n' "including WINEDEBUG=$WINEDEBUG")"
     fi
 
     winetricks_latest_version_check
