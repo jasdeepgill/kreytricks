@@ -14907,6 +14907,7 @@ w_metadata ie8_new dlls \
     year="2009" \
     media="download" \
     file1="IE8-WindowsXP-x86-ENU.exe" \
+    file2="IE8-WindowsServer2003-x64-ENU.exe" \
     installed_file1="C:/windows/ie8_main.log"
 
 load_ie8_new()
@@ -14916,7 +14917,7 @@ load_ie8_new()
 
     # Also fetch 64-bit
     if [ "$W_ARCH" = win64 ]; then
-        w_download http://download.microsoft.com/download/7/5/4/754D6601-662D-4E39-9788-6F90D8E5C097/IE8-WindowsServer2003-x64-ENU.exe bcff753e92ceabf31cfefaa6def146335c7cb27a50b95cd4f4658a0c3326f499
+        w_download http://download.microsoft.com/download/7/5/4/754D6601-662D-4E39-9788-6F90D8E5C097/$file2 bcff753e92ceabf31cfefaa6def146335c7cb27a50b95cd4f4658a0c3326f499
     fi
 
     # File 'IE8-WindowsXP-x86-ENU.exe' is 'PE32 executable (GUI) Intel 80386, for MS Windows' -> 32-bit executable
@@ -14933,17 +14934,17 @@ load_ie8_new()
         7z x "$W_CACHE/$W_PACKAGE/$file1" "-o$WINEPREFIX/drive_c/Program Files/Internet Explorer" iexplore.exe iertutil.dll urlmon.dll || w_die "Unable to export file 'iexplore.exe' in '$WINEPREFIX/drive_c/Program Files/Internet Explorer/'"
     elif ! w_workaround_wine_bug XXXX; then
         w_debug "This system is able to run file $file1 on 64-bit wineprefix"
-
+        w_fixme "Verb ie8 installation of 32-bit version can be improved using arguments (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554583771)"
         "$WINE" "$W_CACHE/$W_PACKAGE/$file1"
 
         # Capture the error code
         case $? in
           0)
               w_info "File $file1 returned $?, assuming that it was installed correctly"
-              [ ! -e "$WINEPREFIX/drive_c/windows/ie8_main.log" ] && w_die "File $file1 returned 0 (true?), but the installation wasn't successful"
+              w_warn "This may return $? even on failure"
           ;;
-          4) w_warn "File $file1 returned $?, which **SEEMS TO** indicate invalid argument or \help used" ;;
-          7) w_die "File $file1 returned $? which error code which seems to be related to system not supported, trigger for this is unknown and required to run on 64-bit wineprefix (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554576478)" ;;
+          4) w_warn "File $file1 returned $?, which **SEEMS TO** indicate invalid argument or '\help' used" ;;
+          7) w_die "File $file1 returned $? which error code which seems to be related to system not supported, trigger for this is unknown and required to run on 64-bit wineprefix (https://github.com/Kreytricks/kreytricks/pull/41\#issuecomment-554576478)" ;;
           # Diagnostics for error code - https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554580062
           14) w_die "File $file1 returned $? which error code seems to indicate unsupported winver checked from 'iexplore.exe' in current wineprefix (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554580062)" ;;
           # Diagnostics for error code - https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554658319
@@ -14956,21 +14957,37 @@ load_ie8_new()
 
     # Also install 64-bit version
     if [ "$W_ARCH" = win64 ]; then
-        "$WINE" "$W_CACHE/$W_PACKAGE/IE8-WindowsXP-x86-ENU.exe"
 
-        # Capture the error code
-        case $? in
-          0)
-              w_info "File $file1 returned $?, assuming that it was installed correctly"
-              [ ! -e "$WINEPREFIX/drive_c/windows/ie8_main.log" ] && w_die "File $file1 returned 0 (true?), but the installation wasn't successful"
-          ;;
-          *) w_die "File $file1 returned error code '$?' which is unknown to winetricks, please make an issue about it with method to reproduce it"
-        esac
+        w_fixme "File $file2 (64-bit version of ie6) doesn't work"
+        w_fixme "file a winebug for $file2 runtime"
+        if w_workaround_wine_bug XXXX; then
+            [ ! -d "$WINEPREFIX/drive_c/Program Files (x86)/Internet Explorer" ] && { mkdir -p "$WINEPREFIX/drive_c/Program Files (x86)/Internet Explorer" || w_die 1 "Unable to make a new directory in '$WINEPREFIX/drive_c/Program Files (x86)/Internet Explorer'" ;}
+            # Also requires iertutil.dll AND urlmon.dll
+            w_fixme "Requires iertutil.dll AND urlmon.dll which are not winelibbed"
+            7z x "$W_CACHE/$W_PACKAGE/$file1" "-o$WINEPREFIX/drive_c/Program Files (x86)/Internet Explorer" iexplore.exe iertutil.dll urlmon.dll || w_die "Unable to export file 'iexplore.exe' in '$WINEPREFIX/drive_c/Program Files/Internet Explorer/'"
+
+        elif ! w_workaround_wine_bug XXXX; then
+            # Do not use w_try since we are capturing error code
+            w_fixme "Verb ie8 installation of 64-bit version can be improved using arguments (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554583771)"
+            "$WINE" "$W_CACHE/$W_PACKAGE/$file2"
+
+            # Capture the error code
+            case $? in
+                0)
+                    w_info "File $file2 returned $?, assuming that it was installed correctly"
+                    w_warn "This may return $? even on failure"
+                ;;
+                7) w_die "File $file2 returned $? which error code which seems to be related to system not supported, trigger for this is unknown and required to run on 64-bit wineprefix (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554576478)" ;;
+                *) w_die "File $file2 returned error code '$?' which is unknown to winetricks, please make an issue about it with method to reproduce it"
+            esac
+        else
+            w_die 125 "ie8 - w_workaround_wine_bug XXXX (64-bit)"
+        fi
     fi
 
-    # DO-NOT-MERGE: Remove this prior to merge
-    w_warn "EXECUTING!!"
-    "$WINE" "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe"
+    # # DO-NOT-MERGE: Remove this prior to merge
+    # w_warn "EXECUTING!!"
+    # "$WINE" "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe"
 }
 
 #----------------------------------------------------------------
