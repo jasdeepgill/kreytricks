@@ -14960,13 +14960,14 @@ load_ie8_new()
 
         w_fixme "File $file2 (64-bit version of ie6) doesn't work"
         w_fixme "file a winebug for $file2 runtime"
-        if w_workaround_wine_bug XXXX; then
+        # https://bugs.winehq.org/show_bug.cgi?id=34048
+        if w_workaround_wine_bug 34048; then
             [ ! -d "$WINEPREFIX/drive_c/Program Files (x86)/Internet Explorer" ] && { mkdir -p "$WINEPREFIX/drive_c/Program Files (x86)/Internet Explorer" || w_die 1 "Unable to make a new directory in '$WINEPREFIX/drive_c/Program Files (x86)/Internet Explorer'" ;}
             # Also requires iertutil.dll AND urlmon.dll
             w_fixme "Requires iertutil.dll AND urlmon.dll which are not winelibbed"
             7z x "$W_CACHE/$W_PACKAGE/$file1" "-o$WINEPREFIX/drive_c/Program Files (x86)/Internet Explorer" iexplore.exe iertutil.dll urlmon.dll || w_die "Unable to export file 'iexplore.exe' in '$WINEPREFIX/drive_c/Program Files/Internet Explorer/'"
 
-        elif ! w_workaround_wine_bug XXXX; then
+        elif ! w_workaround_wine_bug 34048; then
             # Do not use w_try since we are capturing error code
             w_fixme "Verb ie8 installation of 64-bit version can be improved using arguments (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554583771)"
             "$WINE" "$W_CACHE/$W_PACKAGE/$file2"
