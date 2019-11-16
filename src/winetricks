@@ -14902,10 +14902,6 @@ w_metadata ie8_new dlls \
     file1="IE8-WindowsXP-x86-ENU.exe" \
     installed_file1="C:/windows/ie8_main.log"
 
-# KREYTRICKS-COMPATIBILITY
-w_debug() { printf '%s\n' "DEBUG: $?" ;}
-w_fixme() { printf '%s\n' "FIXME: $?" ;}
-
 load_ie8_new()
 {
     # Fetch
@@ -14920,40 +14916,8 @@ load_ie8_new()
 
     w_override_dlls builtin iexplore.exe
 
-    # Make sure that wine libs are using for isetup.exe
-    # $ printf '%s\n' ""$(7z l "$HOME/.cache/winetricks/ie8/IE8-WindowsXP-x86-ENU.exe" | grep -oP "\w+.dll")" "$(WINEDEBUG="-all,+loaddll" wine "$HOME/.cache/winetricks/ie8/IE8-WindowsXP-x86-ENU.exe" 2>/dev/null | grep -oP "\w+.dll")"" | sort | uniq -D | uniq | sed -E "s#(\w+).dll#    w_override_app_dlls isetup.exe native \1#g"
-    w_override_app_dlls iesetup.exe native admparse
-    w_override_app_dlls iesetup.exe native advpack
-    w_override_app_dlls iesetup.exe native hmmapi
-    w_override_app_dlls iesetup.exe native icardie
-    w_override_app_dlls iesetup.exe native ieakeng
-    w_override_app_dlls iesetup.exe native ieaksie
-    w_override_app_dlls iesetup.exe native ieakui
-    w_override_app_dlls iesetup.exe native iedkcs32
-    w_override_app_dlls iesetup.exe native iedvtool
-    w_override_app_dlls iesetup.exe native ieframe
-    w_override_app_dlls iesetup.exe native iepeers
-    w_override_app_dlls iesetup.exe native iernonce
-    w_override_app_dlls iesetup.exe native iertutil
-    w_override_app_dlls iesetup.exe native iesetup
-    w_override_app_dlls iesetup.exe native ieui
-    w_override_app_dlls iesetup.exe native inseng
-    w_override_app_dlls iesetup.exe native jscript
-    w_override_app_dlls iesetup.exe native jsdbgui
-    w_override_app_dlls iesetup.exe native jsdebuggeride
-    w_override_app_dlls iesetup.exe native jsprofilercore
-    w_override_app_dlls iesetup.exe native jsprofilerui
-    w_override_app_dlls iesetup.exe native licmgr10
-    w_override_app_dlls iesetup.exe native msfeedsbs
-    w_override_app_dlls iesetup.exe native mshtml
-    w_override_app_dlls iesetup.exe native mshtmler
-    w_override_app_dlls iesetup.exe native msrating
-    w_override_app_dlls iesetup.exe native occache
-    w_override_app_dlls iesetup.exe native sqmapi
-    w_override_app_dlls iesetup.exe native urlmon
-    w_override_app_dlls iesetup.exe native vbscript
-    w_override_app_dlls iesetup.exe native webcheck
-    w_override_app_dlls iesetup.exe native wininet
+    # Make sure that wine libs are used instead of provided
+    w_override_dlls native admparse advpack hmmapi icardie ieakeng ieaksie ieakui iedkcs32 iedvtool ieframe iepeers iernonce iertutil iesetup ieui inseng jscript jsdbgui jsdebuggeride jsprofilercore jsprofilerui licmgr10 msfeedsbs mshtml mshtmler msrating occache sqmapi urlmon vbscript webcheck wininet
 
     # Execute
     # NOTE: Do not use 'w_try' since we are capturing error code
