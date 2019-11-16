@@ -191,7 +191,7 @@ fi
 # Export W_FIXME messages by default
 if [ -z "$WINETRICKS_NO_FIXME" ]; then
     unset W_FIXME
-elif [ -z "$WINETRICKS_NO_FIXME" ]; then
+elif [ -n "$WINETRICKS_NO_FIXME" ]; then
     W_FIXME=1
 fi
 
@@ -307,14 +307,18 @@ w_debug()
 w_fixme()
 {
     w_message="$1"
+
+    # Shift
     if [ -n "$w_message" ]; then
         shift 1
     elif [ -z "$w_message" ]; then
         w_die bug "w_fixme was parsed without any value"
     fi
 
-    [ -n "$W_FIXME" ] && printf '%s\n' "FIXME: $w_message"
+    # Output message
+    [ -z "$W_FIXME" ] && printf '%s\n' "FIXME: $w_message"
 
+    # Unset
     unset w_message
 }
 
@@ -14906,34 +14910,52 @@ w_metadata ie8_new dlls \
 load_ie8_new()
 {
     # Fetch
+    # This is installer for winxp
     w_download https://download.microsoft.com/download/C/C/0/CC0BD555-33DD-411E-936B-73AC6F95AE11/IE8-WindowsXP-x86-ENU.exe 5a2c6c82774bfe99b175f50a05b05bcd1fac7e9d0e54db2534049209f50cd6ef
 
     # File 'IE8-WindowsXP-x86-ENU.exe' is 'PE32 executable (GUI) Intel 80386, for MS Windows' -> 32-bit executable
-    w_fixme "Add workaround to run on 64-bit wineprefix"
-    w_package_unsupported_win64
+    w_fixme "Make a tracking for ie8 running on 64-bit wineprefix"
+    if w_workaround_wine_bug XXXX; then
+        w_fixme "Add workaround to run on 64-bit wineprefix"
+        # Requires iertutil.dll AND urlmon.dll (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554661572)
+        w_fixme "Verb ie8 asks user-input for overwrite"
+        w_fixme "Requires iertutil.dll AND urlmon.dll which are not winelibbed, exporting these from file $file1"
+        7z x "$W_CACHE/$W_PACKAGE/$file1" "-o$WINEPREFIX/drive_c/Program Files/Internet Explorer" iexplore.exe iertutil.dll urlmon.dll || w_die "Unable to export file 'iexplore.exe' in '$WINEPREFIX/drive_c/Program Files/Internet Explorer/'"
+    elif ! w_workaround_wine_bug XXXX; then
+        w_debug "This system is able to run file $file1 on 64-bit wineprefix"
+    else
+        w_die 125 "ie8 - w_workaround_wine_bug XXXX"
+    fi
 
     #w_set_app_winver isetup.exe winxp
     #w_set_app_winver IE8-WindowsXP-x86-ENU.exe winxp
 
-    w_override_dlls builtin iexplore.exe
+    #w_override_dlls builtin iexplore.exe
 
     # Make sure that wine libs are used instead of provided
     w_override_dlls native admparse advpack hmmapi icardie ieakeng ieaksie ieakui iedkcs32 iedvtool ieframe iepeers iernonce iertutil iesetup ieui inseng jscript jsdbgui jsdebuggeride jsprofilercore jsprofilerui licmgr10 msfeedsbs mshtml mshtmler msrating occache sqmapi urlmon vbscript webcheck wininet
 
     # Execute
     # NOTE: Do not use 'w_try' since we are capturing error code
-    "$WINE" "$W_CACHE/$W_PACKAGE/$file1"
+    #"$WINE" "$W_CACHE/$W_PACKAGE/$file1"
 
-    case $? in
-      0)
-          w_info "File $file1 returned $?, assuming that it was installed correctly"
-          [ ! -e "$WINEPREFIX/drive_c/windows/ie8_main.log" ] && w_die "File $file1 returned 0 (true?), but the installation wasn't successful"
-      ;;
-      4) w_warn "File $file1 returned $?, which **SEEMS TO** indicate invalid argument or \help used" ;;
-      7) w_die "File $file1 returned $? which error code which seems to be related to system not supported, trigger for this is unknown (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554576478)" ;;
-      14) w_die "File $file1 returned $? which error code seems to indicate unsupported winver checked from 'iexplore.exe' in current wineprefix (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554580062)" ;;
-      *) w_die "File $file1 returned error code '$?' which is unknown to winetricks"
-    esac
+    #case $? in
+    #  0)
+    #      w_info "File $file1 returned $?, assuming that it was installed correctly"
+    #      [ ! -e "$WINEPREFIX/drive_c/windows/ie8_main.log" ] && w_die "File $file1 returned 0 (true?), but the installation wasn't successful"
+    #  ;;
+    #  4) w_warn "File $file1 returned $?, which **SEEMS TO** indicate invalid argument or \help used" ;;
+    #  7) w_die "File $file1 returned $? which error code which seems to be related to system not supported, trigger for this is unknown and required to run on 64-bit wineprefix (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554576478)" ;;
+    #  14) w_die "File $file1 returned $? which error code seems to indicate unsupported winver checked from 'iexplore.exe' in current wineprefix (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554580062)" ;;
+    #  # https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554658319
+    #  130) w_warn "FIle $file1 returned $? which seems to be a permission issue" ;;
+    #  *) w_die "File $file1 returned error code '$?' which is unknown to winetricks"
+    #esac
+
+    w_set_winver winxp
+
+    w_warn "EXECUTING!!"
+    "$WINE" "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe"
 }
 
 #----------------------------------------------------------------
