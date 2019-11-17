@@ -3538,45 +3538,38 @@ winetricks_get_platform()
   # Linux - `uname` returns 'GNU/Linux'
   if [ "$(uname -s)" = "Linux" ]; then
     export W_PLATFORM="nix_linux"
-    printf "%s\n" "$W_PLATFORM"
     return 0
 
   # FreeBSD - `uname` returns 'FreeBSD'
   elif [ "$(uname -s)" = "FreeBSD" ]; then
     export W_PLATFORM="nix_freebsd"
-    printf "%s\n" "$W_PLATFORM"
     return 0
 
   # Redox - `uname` returns 'Redox'
   elif [ "$(uname -s)" = "Redox" ]; then
     export W_PLATFORM="nix_redox"
-    printf "%s\n" "$W_PLATFORM"
     return 0
 
   # Cygwin - `uname -o` returns 'Cygwin'
   # `uname -o` on macOS is invalid, do not output error if invoked (https://github.com/Winetricks/winetricks/pull/1415#issuecomment-549769127)
   elif [ "$(uname -o 2>/dev/null)" = "Cygwin" ]; then
     export W_PLATFORM="windows_cygwin"
-    printf "%s\n" "$W_PLATFORM"
     return 0
 
   # MacOS - `uname` returns 'Darwin'
   elif [ "$(uname -s)" = "Darwin" ]; then
     export W_PLATFORM="nix_darwin"
-    printf "%s\n" "$W_PLATFORM"
     return 0
 
   # Windows - Impossible to get?
   elif [ "$(uname)" = "Windows" ]; then
     w_warn "How did you execute POSIX shell on native Windows? File an issue for compatibility"
     export W_PLATFORM="windows_windows"
-    printf "%s\n" "$W_PLATFORM"
     return 0
 
   # WineCMD/CMD
   elif [ "$OS" = "Windows_NT" ] && [ -z "$(uname)" ]; then
     export W_PLATFORM="wine_cmd"
-    printf "%s\n" "$W_PLATFORM"
     return 0
 
   else
@@ -3585,7 +3578,6 @@ winetricks_get_platform()
    case "$(uname -r)" in
      *-Microsoft)
       export W_PLATFORM="windows_wsl"
-      printf "%s\n" "$W_PLATFORM"
       return 0
    esac
   fi
@@ -5749,7 +5741,8 @@ winetricks_init()
 
     # Output Header informing about used wine and checksum
     if [ -z "$WINETRICKS_SUPER_QUIET" ] ; then
-        printf '%s\n' "Using kreytricks $(winetricks_print_version) with $WINETRICKS_ORIG_WINE_VERSION and WINEARCH=$W_ARCH on WINEPREFIX=$([ -n "$WINEPREFIX" ] && { printf '%s\n' "$WINEPREFIX" ;} || printf '%s\n' "$HOME/.wine") $([ -n "$WINEDEBUG" ] && printf '%s\n' "including WINEDEBUG=$WINEDEBUG")"
+        winetricks_get_platform
+        printf '%s\n' "Using kreytricks $(winetricks_print_version) on platform $W_PLATFORM with $WINETRICKS_ORIG_WINE_VERSION and WINEARCH=$W_ARCH on WINEPREFIX=$([ -n "$WINEPREFIX" ] && { printf '%s\n' "$WINEPREFIX" ;} || printf '%s\n' "$HOME/.wine") $([ -n "$WINEDEBUG" ] && printf '%s\n' "including WINEDEBUG=$WINEDEBUG")"
     fi
 
     winetricks_latest_version_check
