@@ -15942,19 +15942,8 @@ load_steam()
     # 2016/10/28: 029f918a29b2b311711788e8a477c8de529c11d7dba3caf99cbbde5a983efdad
     # 2018/06/01: 3bc6942fe09f10ed3447bccdcf4a70ed369366fef6b2c7f43b541f1a3c5d1c51
     w_download http://media.steampowered.com/client/installer/SteamSetup.exe 3bc6942fe09f10ed3447bccdcf4a70ed369366fef6b2c7f43b541f1a3c5d1c51
-    w_try_cd "$W_CACHE/$W_PACKAGE"
 
-    # Should be fixed in newer steam versions, since 2012. Commenting out for a while before removing in case users need to revert locally
-    #
-    # Install corefonts first, so if the user doesn't have cabextract/Wine with cab support, we abort before installing Steam.
-    # FIXME: support using Wine's cab support
-    #if ! test -f "$W_FONTSDIR_UNIX/Times.TTF" && \
-    #    w_workaround_wine_bug 22751 "Installing corefonts to prevent a Steam crash"
-    #then
-    #    w_call corefonts
-    #fi
-
-    if test $W_OPT_UNATTENDED; then
+    if [ -n "$W_OPT_UNATTENDED" ]; then
             w_ahk_do "
             run, SteamSetup.exe
             SetTitleMatchMode, 2
@@ -15974,11 +15963,14 @@ load_steam()
             ControlClick, Button2
             WinWaitClose
             "
+    elif [ -z "$W_OPT_UNATTENDED" ]; then
+            w_try "$WINE" "$W_CACHE/$W_PACKAGE/SteamSetup.exe"
     else
-            w_try "$WINE" SteamSetup.exe
+        w_die 255 "Steam W_OPT_UNATTENDED"
     fi
 
     # Not all users need this disabled, but let's play it safe for now
+    w_fixme "Verb Steam uses w_workaround_wine_bug which points to 22053 which is closed as NOTOURBUG"
     if w_workaround_wine_bug 22053 "Disabling gameoverlayrenderer to prevent game crashes on some machines."; then
         w_override_dlls disabled gameoverlayrenderer
     fi
