@@ -19427,6 +19427,135 @@ load_lswcs()
 
 #----------------------------------------------------------------
 
+w_metadata leagueoflegends games \
+    title="League of Legends (Free, MOBA)" \
+    publisher="Riot Games, Inc" \
+    year="2009" \
+    media="download" \
+    installed_exe1="C:/Riot Games/League of Legends/LeagueClient.exe"
+
+load_leagueoflegends()
+{
+    # FETCH
+    ## Game has multiple regions and this logic allows end-user to choose it's preffered
+    case $leagueoflegends_region in
+        EUNE|EUW|NA|BR|LAN|LAS|OCE|RU|JP|SEA)
+            w_debug "Region '$leagueoflegends_region' is selected for leagueoflegends verb"
+        ;;
+        "")
+            w_fixme "Export variable leagueoflegends_region depending on end-user"
+            w_info "Variable leagueoflegends_region is not parsed, using default EUNE region (supported values are EUNE,EUW,NA,BR,LAN,LAS,OCE,RU,JP and SEA)"
+            leagueoflegends_region="EUNE"
+        ;;
+        *) w_die 2 "Parsed region '$leagueoflegends_region' in leagueoflegends_region variable is not valid, supported values are: EUNE,EUW,NA,BR,LAN,LAS,OCE,RU,JP,SEA"
+    esac
+
+    ## Actual fetch
+    w_fixme "Upstream didn't provide a checksum for it's executables https://boards.na.leagueoflegends.com/en/c/general-discussion/tZ4uPccJ-checksum-for-league-of-legends-installer"
+    if [ ! -e "$W_CACHE/$W_PACKAGE/leagueoflegends-$leagueoflegends_region.exe" ]; then
+        w_download "https://riotgamespatcher-a.akamaihd.net/releases/live/installer/deploy/League%20of%20Legends%20installer%20$leagueoflegends_region.exe"
+    elif [ -e "$W_CACHE/$W_PACKAGE/leagueoflegends-$leagueoflegends_region.exe" ]; then
+        w_debug "File 'leagueoflegends-$leagueoflegends_region.exe' already exists, no need to download it"
+    else
+        w_die 255 "leagueoflegends - fetch"
+    fi
+
+    # Install game and log-in, then exit
+    w_fixme "Game freezes randomly while updating for the first time"
+    w_fixme "Adapt Auto-login using keepass and autohotkey"
+
+    w_try "$WINE" "$W_CACHE/$W_PACKAGE/leagueoflegends-$kreytricks_leagueoflegends_region.exe"
+
+
+    # Install d3dx9 wrapper
+    case $leagueoflegends_d3dx9 in
+        d9vk)
+            w_fixme "Refactor d9vk verb to export it's files in game directory as builtin instead of fucking up whole wineprefix"
+
+            # https://github.com/Joshua-Ashton/d9vk
+            leagueoflegends_d9vk_version="$(w_get_github_latest_prerelease Joshua-Ashton d9vk)"
+            leagueoflegends_d9vk_version="${leagueoflegends_d9vk_version#v}"
+            w_download "https://github.com/Joshua-Ashton/d9vk/releases/download/$leagueoflegends_d9vk_version/d9vk-$leagueoflegends_d9vk_version.tar.gz"
+
+            w_extractor "$W_CACHE/$W_PACKAGE/d9vk-$leagueoflegends_d9vk_version.tar.gz" "$WINEPREFIX/Riot Games/League of Legends/"
+
+            # Overrides
+            ## Exports for League Of Legends Game Client - Window used for login, shop and match making
+            w_try w_override_app_dlls LeagueClient.exe builtin dxgi.dll
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d10.dll
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d10_1.dll
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d10core.dll
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d11.dll
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d9.dll
+
+            ## Exports for League Of Legends Game Core - Game after champion selection
+            w_try w_override_app_dlls 'League of Legends.exe' builtin dxgi.dll
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d10.dll
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d10_1.dll
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d10core.dll
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d11.dll
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d9.dll
+
+            unset leagueoflegends_d9vk_version
+        ;;
+        dxvk)
+            w_die fixme "DXVK doesn't support league of legends without d9vk"
+        ;;
+        dgvoodoo2)
+            w_die fixme "dgvoodoo2 is not yet implemented for league of legends verb"
+        ;;
+        gallium9|galliumnine|galiumnine|galium9)
+            w_fixme "Combining galliumnine with dxv9/dgvoodo2 -> dxvk might improve the game performance"
+            w_fixme "Adapt galliumnine verb to export its libs in distdir and set them as builtin"
+
+            # Fetch galiumnine
+            leagueoflegends_galliumnine_version="$(w_get_github_latest_release iXit wine-nine-standalone)"
+            w_download "https://github.com/iXit/wine-nine-standalone/releases/download/$leagueoflegends_galliumnine_version/gallium-nine-standalone-$leagueoflegends_galliumnine_version.tar.gz"
+
+            w_extractor "$W_CACHE/$W_PACKAGE/gallium-nine-standalone-$leagueoflegends_galliumnine_version.tar.gz" "$W_TMP"
+
+            # Export libs
+            w_try "$W_TMP/gallium-nine-standalone/lib64/d3d9-nine.dll.so" "$WINEPREFIX/Riot Games/League of Legends/d3d9.dll"
+
+            ## Exports for League Of Legends Game Client - Window used for login, shop and match making
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d9.dll
+
+            ## Exports for League Of Legends Game Core - Game after champion selection
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d9.dll
+
+            unset leagueoflegends_galliumnine_version
+        ;;
+        "")
+            w_info "d3dx9 wrapper is not selected, using native d3dx9"
+            w_info "To use d3dx9 wrapper set variable leagueoflegends_d3dx9 on supported value such as: d9vk, dxvk, dgvoodoo2, gallium9"
+        ;;
+        *) w_die 255 "leagueoflegends - d3dx9"
+    esac
+
+    # https://bugs.winehq.org/show_bug.cgi?id=47198
+    # 19112019 - This affects all wine versions
+    if w_workaround_wine_bug 47198; then
+        w_die fixme "leagueoflegends verb is affected by winebug 47198 which causes it to trip pakman (RiotGames's anti-cheat) after champion select"
+    elif ! w_workaround_wine_bug 47198; then
+        w_debug "Not affected by winebug 47198 which causes wine users to trip pakman (RiotGames's anti-cheat) after champion select"
+    else
+        w_die 255 "leagueoflegends 47198"
+    fi
+
+    # https://bugs.winehq.org/show_bug.cgi?id=47915
+    # Workaround for champion select crash on <4.20
+    if w_workaround_wine_bug 47915 '' ,4.20; then
+        w_warn "On wine lower then 4.20 this requires https://github.com/wine-staging/wine-staging/blob/master/patches/user32-InternalGetWindowIcon/0001-user32-AddInternalGetWindowIcon-stub.patch to avoid crash after champion select"
+        w_fixme "Adapt w_wineappimage_builder for 47915 in leagueoflegends verb"
+    elif ! w_workaround_wine_bug 47915 '' ,4.20; then
+        w_debug "Not affected by winebug 47915 which causes leagueoflegends to crash after champion select"
+    else
+        w_die 255 "leagueoflegends - 47915"
+    fi
+}
+
+#----------------------------------------------------------------
+
 w_metadata lemonysnicket games \
     title="Lemony Snicket: A Series of Unfortunate Events" \
     publisher="Activision" \
