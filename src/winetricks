@@ -1965,8 +1965,12 @@ w_steam_getid()
 ## Relevant: https://github.com/Haoose/UPLAY_GAME_ID
 w_uplay_install_game()
 {
+    uplayapp="$1"
+
     w_call 'uplay'
-    w_try "$WINE" 'start' "uplay://launch/$1"
+    w_try "$WINE" 'start' "uplay://launch/$uplayapp"
+
+    unset uplayapp
 }
 
 # Usage:
