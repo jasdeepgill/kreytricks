@@ -365,25 +365,25 @@ w_die()
             if [ -n "$2" ]; then
                 case $LANG in
                     en*)
-                        printf '%s\n' "FATAL: $2" 1>&2
+                        printf 'FATAL: %s\n' "$2" 1>&2
                     ;;
                     cz*)
-                        printf '%s\n' "FATÁLNÍ: $2" 1>&2
+                        printf 'FATÁLNÍ: %s\n' "$2" 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: $2$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
                 esac
                 exit 1
             elif [ -z "$2" ]; then
                 case $LANG in
                     en*)
-                        printf '%s\n' "FATAL: Script returned 'false' for '$*'" 1>&2
+                        printf 'FATAL: %s\n' "Script returned 'false' for '$*'" 1>&2
                     ;;
                     cz*)
-                        printf '%s\n' "FATÁLNÍ: Script vrátil 'false' pro '$*'" 1>&2
+                        printf 'FATÁLNÍ: %s\n' "Script vrátil 'false' pro '$*'" 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: Script returned 'false' for '$*'$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "Script returned 'false' for '$*'$untranslated" 1>&2
                 esac
                 exit 1
             else
@@ -394,23 +394,23 @@ w_die()
             if [ -n "$2" ]; then
                 case $LANG in
                     en)
-                        printf '%s\n' "FATAL: $2" 1>&2 1>&2
+                        printf 'FATAL: %s\n' "$2" 1>&2 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: $2$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
                     ;;
                 esac
                 exit 2
             elif [ -z "$2" ]; then
                 case $LANG in
                     en*)
-                        printf '%s\n' "FATAL: Syntax error for '$*'" 1>&2
+                        printf 'FATAL: %s\n' "Syntax error for '$*'" 1>&2
                     ;;
                     cz*)
-                        printf '%s\n' "FATAL: Syntax error for '$*'" 1>&2
+                        printf 'FATAL: %s\n' "Syntax error for '$*'" 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: Syntax error for '$*'$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "Syntax error for '$*'$untranslated" 1>&2
                     ;;
                 esac
                 exit 2
@@ -422,43 +422,44 @@ w_die()
             if [ -n "$2" ]; then
                 case $LANG in
                     en*)
-                        printf '%s\n' "FATAL: $2" 1>&2
+                        printf 'FATAL: %s\n' "$2" 1>&2
                     ;;
                     cz*)
-                        printf '%s\n' "FATÁLNÍ: $2" 1>&2
+                        printf 'FATÁLNÍ: %s\n' "$2" 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: $2$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
                 esac
                 exit 3
             elif [ -z "$2" ]; then
                 case $LANG in
                     en*)
-                        printf '%s\n' "FATAL: Permission issue for '$*'" 1>&2
+                        printf 'FATAL: %s\n' "Permission issue for '$*'" 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: Permission issue for '$*'$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "Permission issue for '$*'$untranslated" 1>&2
                 esac
                 exit 3
-            else w_die 255 'die - permission'
+            else
+                w_die 255 'die - permission'
             fi
         ;;
         32)
             if [ -n "$2" ]; then
                 case $LANG in
                     en*)
-                        printf '%s\n' "FATAL: $2" 1>&2
+                        printf 'FATAL: %s\n' "$2" 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: $2$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
                 esac
             elif [ -z "$2" ]; then
                 case $LANG in
                     en*)
-                        printf '%s\n' "FATAL: 64-bit system is not supported for package '$W_PACKAGE'" 1>&2
+                        printf 'FATAL: %s\n' "64-bit system is not supported for package '$W_PACKAGE'" 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: 64-bit system is not supported for package '$W_PACKAGE'$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "64-bit system is not supported for package '$W_PACKAGE'$untranslated" 1>&2
                 esac
             else
                 w_die 255 'w_die 32'
@@ -469,18 +470,18 @@ w_die()
             if [ -n "$2" ]; then
                 case $LANG in
                     en*)
-                        printf '%s\n' "FATAL: $2" 1>&2
+                        printf 'FATAL: %s\n' "$2" 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: $2$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
                 esac
             elif [ -z "$2" ]; then
                 case $LANG in
                     en*)
-                        printf '%s\n' "FATAL: 32-bit system is not supported for '$*'" 1>&2
+                        printf 'FATAL: %s\n' "32-bit system is not supported for '$*'" 1>&2
                     ;;
                     *)
-                        printf '%s\n' "FATAL: 32-bit system is not supported for '$*'$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "32-bit system is not supported for '$*'$untranslated" 1>&2
                 esac
             else
                 w_die 255 'w_die 64'
@@ -490,30 +491,30 @@ w_die()
         126) # Not executable
             case $LANG in
                 en*)
-                    printf '%s\n' "FATAL: Returned not executable for '$*'" 1>&2
+                    printf 'FATAL: %s\n' "Returned not executable for '$*'" 1>&2
                 ;;
                 *)
-                    printf '%s\n' "FATAL: Returned not executable for '$*'$untranslated" 1>&2
+                    printf 'FATAL: %s\n' "Returned not executable for '$*'$untranslated" 1>&2
             esac
             exit 126
         ;;
         130) # Killed by user
             case $LANG in
                 en*)
-                    printf '%s\n' "FATAL: Killed by user" 1>&2
+                    printf 'FATAL: %s\n' "Killed by user" 1>&2
                 ;;
                 *)
-                    printf '%s\n' "FATAL: Killed by user$untranslated" 1>&2
+                    printf 'FATAL: %s\n' "Killed by user$untranslated" 1>&2
             esac
             exit 130
         ;;
         wtf|255) # Unexpected
             case $LANG in
                 en*)
-                    printf '%s\n' "FATAL: Unexpected result in '$2'" 1>&2
+                    printf 'FATAL: %s\n' "Unexpected result in '$2'" 1>&2
                 ;;
                 *)
-                    printf '%s\n' "FATAL: Unexpected result in '$2'$untranslated" 1>&2
+                    printf 'FATAL: %s\n' "Unexpected result in '$2'$untranslated" 1>&2
             esac
             exit 255
         ;;
@@ -528,10 +529,10 @@ w_die()
             exit 1
         ;;
         fixme)
-            printf '%s\n' "FIXME: $*" 1>&2 ; exit 1
+            printf 'FIXME: %s\n' "$*" 1>&2 ; exit 1
         ;;
         *)
-            printf '%s\n' "FATAL: $*" 1>&2 ; exit 1
+            printf 'FATAL: %s\n' "$*" 1>&2 ; exit 1
     esac
 }
 
