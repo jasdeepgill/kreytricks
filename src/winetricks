@@ -234,7 +234,7 @@ w_askpermission()
             pl*) w_die "Anulowano operację, opuszczanie." ;;
             *) w_die "Operation cancelled, quitting." ;;
         esac
-        exec false
+        die 1
     fi
 
     unset _W_timeout
@@ -352,7 +352,7 @@ w_die()
                 en*)
                     w_debug "Script returned true for '$*'" 1>&2
                 ;;
-                en*)
+                cz*)
                     w_debug "Script vrátil true pro '$*'" 1>&2
                 ;;
                 *)
@@ -700,6 +700,7 @@ w_lutris_installer()
     fi
 
     # Generate yaml file and pipe it to lutris
+    # shellcheck disable=SC2015
     printf '%s\n' \
         "name: $title" \
         'game_slug: my-game' \
@@ -16041,7 +16042,7 @@ load_rockstar_game_launcher()
         if [ ! -d "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/" ]; then
             w_debug "Launcher folder not found, creating..."
             w_try mkdir -p "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/"
-        elif [ -d "$WINEPREFIX/drive_c/Program Files/Rockstar/Games/Launcher/"]; then
+        elif [ -d "$WINEPREFIX/drive_c/Program Files/Rockstar/Games/Launcher/" ]; then
             w_debug "Launcher folder already exists, no need to create the folder"
         fi
 
