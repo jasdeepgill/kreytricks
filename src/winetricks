@@ -1118,15 +1118,15 @@ w_pathconv()
             # for some reason, cygpath turns some spaces into newlines?!
             cygpath "$@" | tr '\012' '\040' | sed 's/ $//'
             ;;
-        windows_windows) w_die "FIXME: w_pathconv for $1 not implemented" ;;
-        nix_redox) w_die "FIXME: w_pathconv for $1 not implemented" ;;
+        windows_windows) w_die fixme "w_pathconv for $1 not implemented" ;;
+        nix_redox) w_die fixme "w_pathconv for $1 not implemented" ;;
         nix_linux|nix_freebsd|nix_darwin)
             case "$@" in
                 -u?c:\\*|-u?C:\\*|-u?c:/*|-u?C:/*) winetricks_wintounix "$2" ;;
                 *) winetricks_early_wine winepath "$@" ;;
             esac
         ;;
-        *) w_die "Unknown platform in w_pathconv() : $W_PLATFORM"
+        *) w_die 255 "Unknown platform in w_pathconv() : $W_PLATFORM"
     esac
 }
 
@@ -19454,7 +19454,7 @@ load_leagueoflegends()
     ## Actual fetch
     w_fixme "Upstream didn't provide a checksum for it's executables https://boards.na.leagueoflegends.com/en/c/general-discussion/tZ4uPccJ-checksum-for-league-of-legends-installer"
     if [ ! -e "$W_CACHE/$W_PACKAGE/leagueoflegends-$leagueoflegends_region.exe" ]; then
-        w_download "https://riotgamespatcher-a.akamaihd.net/releases/live/installer/deploy/League%20of%20Legends%20installer%20$leagueoflegends_region.exe"
+        w_download_to "$W_CACHE/$W_PACKAGE" "https://riotgamespatcher-a.akamaihd.net/releases/live/installer/deploy/League%20of%20Legends%20installer%20$leagueoflegends_region.exe" '' "leagueoflegends-$leagueoflegends_region.exe"
     elif [ -e "$W_CACHE/$W_PACKAGE/leagueoflegends-$leagueoflegends_region.exe" ]; then
         w_debug "File 'leagueoflegends-$leagueoflegends_region.exe' already exists, no need to download it"
     else
@@ -19463,9 +19463,18 @@ load_leagueoflegends()
 
     # Install game and log-in, then exit
     w_fixme "Game freezes randomly while updating for the first time"
-    w_fixme "Adapt Auto-login using keepass and autohotkey"
 
-    w_try "$WINE" "$W_CACHE/$W_PACKAGE/leagueoflegends-$kreytricks_leagueoflegends_region.exe"
+    w_fixme "Adapt Auto-login using keepass and autohotkey"
+        w_ahk_do "
+        SetTitleMatchMode, 2 ; no idea what this is
+        Run, Z:\\home\\$USER\\.cache\\winetricks\\leagueoflegends\\leagueoflegends-EUNE.exe
+        WinWait, League of Legends installer ; Wait untill expected window is present
+        Send {Enter} ; Sent Enter to press 'Next >' on first page of installer
+        "
+
+    w_die ping
+
+    w_try "$WINE" "$W_CACHE/$W_PACKAGE/leagueoflegends-$leagueoflegends_region.exe"
 
 
     # Install d3dx9 wrapper
