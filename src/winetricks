@@ -15,7 +15,7 @@ WINETRICKS_VERSION=20190912-next
 
 #--------------------------------------------------------------------
 #
-# Winetricks is a package manager for Win32 dlls and applications on POSIX.
+# Winetricks is a hacky script that downloads random stuff for you that may be useful in wine.
 # Features:
 # - Consists of a single shell script - no installation required
 # - Downloads packages automatically from original trusted sources
