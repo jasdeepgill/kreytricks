@@ -15,7 +15,7 @@ WINETRICKS_VERSION=20190912-next
 
 #--------------------------------------------------------------------
 #
-# Winetricks is a package manager for Win32 dlls and applications on POSIX.
+# Winetricks is a hacky script that downloads random stuff for you that may be useful in wine.
 # Features:
 # - Consists of a single shell script - no installation required
 # - Downloads packages automatically from original trusted sources
@@ -163,12 +163,18 @@ WINETRICKS_VERSION=20190912-next
 # - Pull Requests: https://github.com/Winetricks/winetricks/pulls
 #--------------------------------------------------------------------
 
+# QA: wtf?
 # FIXME: XDG_CACHE_HOME is defined twice, clean this up
 XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 
+# QA: wtf?
 W_COUNTRY=""
+# QA: wtf?
 W_PREFIXES_ROOT="${WINE_PREFIXES:-$XDG_DATA_HOME/wineprefixes}"
+
+# Variable used in strings that are not translated
+[ -z "$WINETRICKS_IGNORE_TRANSLATE" ] && export untranslated="(translate_me)"
 
 # For temp files before $WINEPREFIX is available:
 if [ -x "$(command -v mktemp 2>/dev/null)" ] ; then
@@ -179,21 +185,31 @@ else
     W_TMP_EARLY="/tmp"
 fi
 
+# Export translate warning
+[ -z "$WINETRICKS_NO_LANG_WARNS" ] && export untranslated=" (FIXME: Not translated in $LANG)"
+
+# Export W_FIXME messages by default
+if [ -z "$WINETRICKS_NO_FIXME" ]; then
+    unset W_FIXME
+elif [ -z "$WINETRICKS_NO_FIXME" ]; then
+    W_FIXME=1
+fi
+
 #---- Public Functions ----
 
 # Ask permission to continue
 w_askpermission()
 {
-    echo "------------------------------------------------------"
-    echo "$@"
-    echo "------------------------------------------------------"
+    printf '%s\n' \
+        "------------------------------------------------------" \
+        "$@" \
+        "------------------------------------------------------"
 
-    if test "$W_OPT_UNATTENDED"; then
-        _W_timeout="--timeout 5"
-    fi
+    # QA: wtf?
+    [ -n "$W_OPT_UNATTENDED" ] && _W_timeout="--timeout 5"
 
     case $WINETRICKS_GUI in
-        zenity) $WINETRICKS_GUI "$_W_timeout" --question --title=winetricks --text="$(echo "$@" | sed 's,\\\\,\\\\\\\\,g')" --no-wrap;;
+        zenity) $WINETRICKS_GUI "$_W_timeout" --question --title=winetricks --text="$(printf '%s\n' "$@" | sed 's,\\\\,\\\\\\\\,g')" --no-wrap;;
         kdialog) $WINETRICKS_GUI --title winetricks --warningcontinuecancel "$@" ;;
         none)
             if [ -n "$_W_timeout" ]; then
@@ -202,17 +218,23 @@ w_askpermission()
             else
                 printf %s "Press Y or N, then Enter: "
                 read -r response
-                test "$response" = Y || test "$response" = y
+                case $response in
+                    Y|y|yes)
+                        return 0
+                    ;;
+                    N|n|no)
+                        return 130
+                esac
             fi
     esac
 
-    if test $? -ne 0; then
+    if [ $? -ne 0 ]; then
         case $LANG in
             uk*) w_die "Операція скасована." ;;
             pl*) w_die "Anulowano operację, opuszczanie." ;;
             *) w_die "Operation cancelled, quitting." ;;
         esac
-        exec false
+        die 1
     fi
 
     unset _W_timeout
@@ -223,17 +245,19 @@ w_info()
 {
     # If $WINETRICKS_SUPER_QUIET is set, w_info is a no-op:
     if [ -z "$WINETRICKS_SUPER_QUIET" ] ; then
-        echo "------------------------------------------------------"
-        echo "$@"
-        echo "------------------------------------------------------"
+        printf '%s\n' \
+            "------------------------------------------------------" \
+            "$@" \
+            "------------------------------------------------------"
     fi
 
     _W_timeout="--timeout 3"
 
     case $WINETRICKS_GUI in
-        zenity) $WINETRICKS_GUI "$_W_timeout" --info --title=winetricks --text="$(echo "$@" | sed 's,\\\\,\\\\\\\\,g')" --no-wrap;;
+        zenity) $WINETRICKS_GUI "$_W_timeout" --info --title=winetricks --text="$(printf '%s\n' "$@" | sed 's,\\\\,\\\\\\\\,g')" --no-wrap;;
         kdialog) $WINETRICKS_GUI --title winetricks --msgbox "$@" ;;
         none) ;;
+        *) w_die 2 "WINETRICKS_GUI value '$WINETRICKS_GUI' is not supported by w_info()"
     esac
 
     unset _W_timeout
@@ -244,22 +268,54 @@ w_warn()
 {
     # If $WINETRICKS_SUPER_QUIET is set, w_info is a no-op:
     if [ -z "$WINETRICKS_SUPER_QUIET" ] ; then
-        echo "------------------------------------------------------"
-        echo "$@"
-        echo "------------------------------------------------------"
+        printf '%s\n' \
+            "------------------------------------------------------" \
+            "$@" \
+            "------------------------------------------------------"
     fi
 
-    if test "$W_OPT_UNATTENDED"; then
-        _W_timeout="--timeout 5"
-    fi
+    # QA: wtf?
+    [ -n "$W_OPT_UNATTENDED" ] && _W_timeout="--timeout 5"
 
     case $WINETRICKS_GUI in
         zenity) $WINETRICKS_GUI "$_W_timeout" --error --title=winetricks --text="$(echo "$@" | sed 's,\\\\,\\\\\\\\,g')";;
         kdialog) $WINETRICKS_GUI --title winetricks --error "$@" ;;
         none) ;;
+        *) w_die 2 "WINETRICKS_GUI value '$WINETRICKS_GUI' is not supported by w_warn()"
     esac
 
     unset _W_timeout
+}
+
+# Output debug message to stdin if debug variable is non-zero
+w_debug()
+{
+    w_message="$1"
+    if [ -n "$w_message" ]; then
+        shift 1
+    elif [ -z "$w_message" ]; then
+        w_die bug "w_debug was parsed without any value"
+    fi
+
+    # shellcheck disable=SC2154
+    [ -n "$W_DEBUG" ] && printf 'DEBUG: %s\n' "$w_message"
+
+    unset w_message
+}
+
+# Output fixme message in stdin if W_FIXME variable it set
+w_fixme()
+{
+    w_message="$1"
+    if [ -n "$w_message" ]; then
+        shift 1
+    elif [ -z "$w_message" ]; then
+        w_die bug "w_fixme was parsed without any value"
+    fi
+
+    [ -n "$W_FIXME" ] && printf '%s\n' "FIXME: $w_message"
+
+    unset w_message
 }
 
 # Display warning message to stderr (since it is called inside redirected code)
@@ -267,46 +323,250 @@ w_warn()
 # If user cancels, exit status is 1
 w_warn_cancel()
 {
-    echo "------------------------------------------------------" >&2
-    echo "$@" >&2
-    echo "------------------------------------------------------" >&2
+    printf '%s\n' \
+        "------------------------------------------------------" >&2 \
+        "$@" >&2 \
+        "------------------------------------------------------" >&2
 
-    if test "$W_OPT_UNATTENDED"; then
-        _W_timeout="--timeout 5"
-    fi
+    # QA: wtf?
+    [ -n "$W_OPT_UNATTENDED" ] && _W_timeout="--timeout 5"
 
     # Zenity has no cancel button, but will set status to 1 if you click the go-away X
     case $WINETRICKS_GUI in
-        zenity) $WINETRICKS_GUI "$_W_timeout" --error --title=winetricks --text="$(echo "$@" | sed 's,\\\\,\\\\\\\\,g')";;
+        zenity) $WINETRICKS_GUI "$_W_timeout" --error --title=winetricks --text="$(printf '%s\n' "$@" | sed 's,\\\\,\\\\\\\\,g')";;
         kdialog) $WINETRICKS_GUI --title winetricks --warningcontinuecancel "$@" ;;
         none) ;;
+        *) w_die 2 "WINETRICKS_GUI value '$WINETRICKS_GUI' is not supported by w_warn_cancel()"
     esac
 
-    # can't unset, it clears status
-}
+    # can't unset, it clears status (?)
 
-# Display fatal error message and terminate script
+}
+# Display fatal error message depending on error code or first argument
 w_die()
 {
-    w_warn "$@"
-
-    exit 1
+    # Exit codes (http://tldp.org/LDP/abs/html/exitcodes.html#EXITCODESREF)
+    case "$1" in
+        0|true)
+            case $LANG in
+                en*)
+                    w_debug "Script returned true for '$*'" 1>&2
+                ;;
+                cz*)
+                    w_debug "Script vrátil true pro '$*'" 1>&2
+                ;;
+                *)
+                    w_debug "Script returned true for '$*'$untranslated" 1>&2
+                ;;
+            esac
+            return 0
+        ;;
+        1|false) # False
+            if [ -n "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf 'FATAL: %s\n' "$2" 1>&2
+                    ;;
+                    cz*)
+                        printf 'FATÁLNÍ: %s\n' "$2" 1>&2
+                    ;;
+                    *)
+                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                esac
+                exit 1
+            elif [ -z "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf 'FATAL: %s\n' "Script returned 'false' for '$*'" 1>&2
+                    ;;
+                    cz*)
+                        printf 'FATÁLNÍ: %s\n' "Script vrátil 'false' pro '$*'" 1>&2
+                    ;;
+                    *)
+                        printf 'FATAL: %s\n' "Script returned 'false' for '$*'$untranslated" 1>&2
+                esac
+                exit 1
+            else
+                w_die 255 "die - false"
+            fi
+        ;;
+        2) # Syntax err
+            if [ -n "$2" ]; then
+                case $LANG in
+                    en)
+                        printf 'FATAL: %s\n' "$2" 1>&2 1>&2
+                    ;;
+                    *)
+                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                    ;;
+                esac
+                exit 2
+            elif [ -z "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf 'FATAL: %s\n' "Syntax error for '$*'" 1>&2
+                    ;;
+                    cz*)
+                        printf 'FATAL: %s\n' "Syntax error for '$*'" 1>&2
+                    ;;
+                    *)
+                        printf 'FATAL: %s\n' "Syntax error for '$*'$untranslated" 1>&2
+                    ;;
+                esac
+                exit 2
+            else
+                w_die 255 'w_die - syntax err'
+            fi
+        ;;
+        3) # Permission issue
+            if [ -n "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf 'FATAL: %s\n' "$2" 1>&2
+                    ;;
+                    cz*)
+                        printf 'FATÁLNÍ: %s\n' "$2" 1>&2
+                    ;;
+                    *)
+                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                esac
+                exit 3
+            elif [ -z "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf 'FATAL: %s\n' "Permission issue for '$*'" 1>&2
+                    ;;
+                    *)
+                        printf 'FATAL: %s\n' "Permission issue for '$*'$untranslated" 1>&2
+                esac
+                exit 3
+            else
+                w_die 255 'die - permission'
+            fi
+        ;;
+        32)
+            if [ -n "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf 'FATAL: %s\n' "$2" 1>&2
+                    ;;
+                    *)
+                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                esac
+            elif [ -z "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf 'FATAL: %s\n' "64-bit system is not supported for package '$W_PACKAGE'" 1>&2
+                    ;;
+                    *)
+                        printf 'FATAL: %s\n' "64-bit system is not supported for package '$W_PACKAGE'$untranslated" 1>&2
+                esac
+            else
+                w_die 255 'w_die 32'
+            fi
+            exit 32
+        ;;
+        64)
+            if [ -n "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf 'FATAL: %s\n' "$2" 1>&2
+                    ;;
+                    *)
+                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                esac
+            elif [ -z "$2" ]; then
+                case $LANG in
+                    en*)
+                        printf 'FATAL: %s\n' "32-bit system is not supported for '$*'" 1>&2
+                    ;;
+                    *)
+                        printf 'FATAL: %s\n' "32-bit system is not supported for '$*'$untranslated" 1>&2
+                esac
+            else
+                w_die 255 'w_die 64'
+            fi
+            exit 64
+        ;;
+        126) # Not executable
+            case $LANG in
+                en*)
+                    printf 'FATAL: %s\n' "Returned not executable for '$*'" 1>&2
+                ;;
+                *)
+                    printf 'FATAL: %s\n' "Returned not executable for '$*'$untranslated" 1>&2
+            esac
+            exit 126
+        ;;
+        130) # Killed by user
+            case $LANG in
+                en*)
+                    printf 'FATAL: %s\n' "Killed by user" 1>&2
+                ;;
+                *)
+                    printf 'FATAL: %s\n' "Killed by user$untranslated" 1>&2
+            esac
+            exit 130
+        ;;
+        wtf|255) # Unexpected
+            case $LANG in
+                en*)
+                    printf 'FATAL: %s\n' "Unexpected result in '$2'" 1>&2
+                ;;
+                *)
+                    printf 'FATAL: %s\n' "Unexpected result in '$2'$untranslated" 1>&2
+            esac
+            exit 255
+        ;;
+        ping) # Ping for development
+            case $LANG in
+                en*)
+                    printf '%s\n' "Killed by ping"
+                ;;
+                *)
+                    printf '%s\n' "Killed by ping$untranslated"
+            esac
+            exit 1
+        ;;
+        fixme)
+            printf 'FIXME: %s\n' "$*" 1>&2 ; exit 1
+        ;;
+        *)
+            printf 'FATAL: %s\n' "$*" 1>&2 ; exit 1
+    esac
 }
 
 # Kill all instances of a process in a safe way (Solaris killall kills _everything_)
 w_killall()
 {
+    target="$1"
+    [ -n "$target" ] && shift 1
+
     # shellcheck disable=SC2046,SC2086
-    kill -s KILL $(pgrep $1)
+    kill -s KILL $(pgrep "$target")
+
+    unset target
 }
 
 # Some packages don't support win32, die with an appropriate message
 # Returns 64 (for tests/winetricks-test)
 w_package_unsupported_win32()
 {
-    if [ "$W_ARCH" = "win32" ] ; then
-        w_warn "This package ($W_PACKAGE) does not work on a 32-bit installation. You must use a prefix made with WINEARCH=win64."
-        exit 64
+    if [ "$W_ARCH" = "win32" ]; then
+        case $LANG in
+            en*) w_die 64 "Package '$W_PACKAGE' does not work on 32-bit installation, use prefix with WINEARCH=win64" ;;
+            *) w_die 64 "Package '$W_PACKAGE' does not work on 32-bit installation, use prefix with WINEARCH=win64$untranslated" ;;
+        esac
+    elif [ "$W_ARCH" = "win64" ]; then
+        case $LANG in
+            en*) w_debug "Function 'w_package_unsupported_win32' was called on 64-bit wineprefix" ;;
+            *) w_debug "Function 'w_package_unsupported_win32' was called on 64-bit wineprefix$untranslated"
+        esac
+    else
+        case $LANG in
+            en*) w_die 255 "Unknown W_ARCH variable '$W_ARCH' has been parsed in function 'w_package_unsupported_win32'" ;;
+            *) w_die 255 "Unknown W_ARCH variable '$W_ARCH' has been parsed in function 'w_package_unsupported_win32'$untranslated"
+        esac
     fi
 }
 
@@ -315,14 +575,155 @@ w_package_broken_win64()
 {
     # Optional:
     bug_link="$1"
+    [ -n "$bug_link" ] && shift 1
 
-    if [ "$W_ARCH" = "win64" ] ; then
-        if [ -n "$1" ] ; then
-            w_die "This package ($W_PACKAGE) is broken on 64-bit Wine. Using a prefix made with WINEARCH=win32 to work around this. See: ${bug_link}"
-        else
-            w_die "This package ($W_PACKAGE) is broken on 64-bit Wine. Using a prefix made with WINEARCH=win32 to work around this."
-        fi
+    if [ "$W_ARCH" = "win64" ]; then
+        case $LANG in
+            en*) w_die "Package '$W_PACKAGE' is broken on 64-bit wineprefix $([ -n "$bug_link" ] && printf '%s\n' "See: $bug_link")" ;;
+            *) w_die "Package '$W_PACKAGE' is broken on 64-bit wineprefix $([ -n "$bug_link" ] && printf '%s\n' "See: $bug_link")$untranslated" ;;
+        esac
+    elif [ "$W_ARCH" = "win32" ]; then
+        case $LANG in
+            en*) w_debug "Function 'w_package_broken_win64' has been called on 32-bit wineprefix" ;;
+            *) w_debug "Function 'w_package_broken_win64' has been called on 32-bit wineprefix$untranslated"
+        esac
+    else
+        case $LANG in
+            en*) w_die 255 "Unknown W_ARCH variable '$W_ARCH' has been parsed in function w_package" ;;
+            *) w_die 255 "Unknown W_ARCH variable '$W_ARCH' has been parsed in function w_package$untranslated"
+        esac
     fi
+}
+
+# Abstract: Extracts any archive in specified destdir
+# QA: Do not add a function that extracts in current working directory since that is considered as not enough sanitization in kreytricks (https://github.com/Kreytricks/kreytricks/issues/30)
+w_extractor()
+{
+    # Export arguments
+    file="$1"
+    destdir="$2"
+
+    w_fixme "Implement a method to extract only selected files from an archive"
+
+    # Shift
+    if [ -n "$destdir" ] && [ -n "$file" ]; then
+        shift 2
+    elif [ -z "$destdir" ]; then
+        w_die 2 "Function 'w_extractor' expects two variables, but second variable destdir '$destdir' is blank"
+    fi
+
+    # We are expecting two arguments
+    [ -z "$destdir" ] && w_die 2 "w_extractor expects two arguments, but only one was parsed: file - '$file' ; destdir - '$destdir'"
+
+    case $file in
+      *.zip)
+          if w_check_exec unzip; then
+              unzip -d "$destdir" "$file" || w_die "w_extractor was not able to extract '$file' using unzip"
+              w_fixme "w_extractor .zip - Make sure that the file was extracted successfully"
+          elif w_check_exec 7z; then
+              7z x "$file" -d "$destdir"
+              w_fixme "w_extractor .zip - Make sure that the file was extracted successfully"
+          elif ! w_check_exec 7z && ! w_check_exec unzip && [ -n "$WINETRICKS_FORCE_WIN_7Z" ]; then
+              WINETRICKS_OPT_SHAREDPREFIX=1 w_call 7zip
+
+              # errors out if there is a space between -o and path
+              w_try "$WINE" start 7z x "$(w_pathconv -w "$file")" -o"$(w_pathconv -w "$destdir")"
+
+              w_fixme "w_extractor .zip - Make sure that the file was extracted successfully"
+          fi
+      ;;
+      *.ar)
+          w_fixme "Function w_extractor doesn't have sufficient implementation to extract .ar files '$file'"
+      ;;
+      .deb)
+          w_fixme "Function w_extractor doesn't have sufficient implementation to extract .deb files '$file'"
+      ;;
+      *.msi)
+          w_die fixme "Function w_die does not have implemented extraction for $file"
+      ;;
+      *.tar.xz)
+          if w_check_exec tar; then
+              tar -xfpJ -C "$destdir" || w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar'"
+          elif ! w_check_exec tar; then
+              w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar' - Command 'Tar' is not executable on this system"
+          else
+              w_die 255 "w_extractor .tar.xz"
+          fi
+          w_fixme "w_extractor .tar.xz - Make sure that the file was extracted successfully"
+      ;;
+      *.tar.gz)
+          if w_check_exec tar; then
+              tar -xpfz -C "$destdir" || w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar'"
+          elif ! w_check_exec tar; then
+              w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar' - Command 'Tar' is not executable on this system"
+          else
+              w_die 255 "w_extractor .tar.gz"
+          fi
+          w_fixme "w_extractor .tar.gz - Make sure that the file was extracted successfully"
+      ;;
+      *.exe)
+          if w_check_exec 7z; then
+              7z x "$file" -d "$destdir" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using 7z"
+              w_fixme "w_extractor .exe - implement 7z using wine if 7z is not installed on the system"
+          elif ! w_check_exec 7z && w_check_exec cabextract; then
+              cabextract -q "$@" -d "$destdir" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using cabextract"
+          else
+              w_die 255 "w_extractor .exe"
+          fi
+      ;;
+      *.dl_)
+          if w_check_exec 7z; then
+              7z x "$file" -d "$destdir" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using 7z"
+          elif ! w_check_exec 7z; then
+              w_fixme "Function w_extractor - Unable to extract '$file', because system 7z is not installed and using wine's 7z is not implemented"
+          else
+              w_die 255 "w_extractor .dl_"
+          fi
+          w_fixme "Function w_extractor - Implement 7z wine logic if 7z on system is not available"
+          w_fixme "Function w_extractor - Can we extract '*.dl_' files using cabextract?"
+      ;;
+      *) w_die 2 "File '$file' is not supported by function w_extractor, should it be supported? File an issue in kreytricks"
+    esac
+
+    unset file destdir
+}
+
+# Generate yaml file for lutris to run kreytricks
+# Affected by https://github.com/lutris/lutris/issues/2333
+w_lutris_installer()
+{
+    w_die fixme "Function w_lutris_installer is blocked by https://github.com/lutris/lutris/issues/2333"
+
+    if ! w_check_exec lutris; then
+        w_die 1 "Lutris is not executable on this system, can not be used as frontend"
+    elif w_check_exec lutris; then
+        w_debug "Lutris is executable on this environment"
+    fi
+
+    # Generate yaml file and pipe it to lutris
+    # shellcheck disable=SC2015
+    printf '%s\n' \
+        "name: $title" \
+        'game_slug: my-game' \
+        'version: Installer' \
+        'slug: my-game-installer' \
+        'runner: linux'
+        '' \
+        'script:' \
+        '  files:' \
+        '  - kreytricks: https://raw.githubusercontent.com/Kreytricks/kreytricks/master/src/winetricks' \
+        '  game:' \
+        "    arch: $([ -n "$W_ARCH" ] && printf '%s\n' "$W_ARCH" || w_die "Variable W_ARCH is blank which is unexpected")" \
+        "    $([ -n "$installed_exe1" ] && printf '%s\n' "exe: $installed_exe1" || w_die "Variable installed_exe1 is blank, cannot be exported for lutris")" \
+        "    prefix: $WINEPREFIX" \
+        '  installer:' \
+        '    - chmodx: kreytricks' \
+        '    - execute:' \
+        '      file: kreytricks' \
+        '      description: Executing kreytricks for $W_Package' \
+        "      args: lutris $W_PACKAGE" \
+        '    system:' \
+        '      terminal: true' | lutris -i
 }
 
 # Some packages don't support win64, die with an appropriate message
@@ -330,14 +731,8 @@ w_package_broken_win64()
 # Returns 32 (for tests/winetricks-test)
 w_package_unsupported_win64()
 {
-    if [ "$W_ARCH" = "win64" ] ; then
-        case $LANG in
-            pl*) w_warn "Ten pakiet ($W_PACKAGE) nie działa z 64-bitową instalacją. Musisz użyć prefiksu utworzonego z WINEARCH=win32." ;;
-            ru*) w_warn "Данный пакет не работает в 64-битном окружении. Используйте префикс, созданный с помощью WINEARCH=win32." ;;
-            *) w_warn "This package ($W_PACKAGE) does not work on a 64-bit installation. You must use a prefix made with WINEARCH=win32." ;;
-        esac
-        exit 32
-    fi
+    w_fixme "Replace function w_package_unsupported_win64 with function w_die 32"
+    w_die 32
 }
 
 # For packages that are not well tested or have some known issues on win64, but aren't broken
@@ -347,12 +742,26 @@ w_package_warn_win64()
         case $LANG in
             pl*) w_warn "Ten pakiet ($W_PACKAGE) może nie działać poprawnie z 64-bitową instalacją. Prefiks 32-bitowy może działać lepiej." ;;
             ru*) w_warn "Данный пакет может работать не полностью в 64-битном окружении. 32-битные префиксы могут работать лучше." ;;
-            *) w_warn "This package ($W_PACKAGE) may not fully work on a 64-bit installation. 32-bit prefixes may work better." ;;
+            *) w_warn "Package '$W_PACKAGE' may not work on 64-bit wineprefix" ;;
         esac
     fi
 }
 
 ### w_try and w_try wrappers ###
+
+# Execute with error checking
+# TODO: w_extractor() has to be implemented first
+# TODO: Implement in kreytricks instead of w_try and it's wrappers
+w_try_new()
+{
+    argument="$1"
+    [ -n "$argument" ] && shift 1
+
+    "$@"
+    printf '%s\n' "$?" | w_die
+
+    unset argument
+}
 
 # Execute with error checking
 # Put this in front of any command that might fail
@@ -532,8 +941,11 @@ w_try_regedit32()
 {
     # on windows, doesn't work without cmd /c
     case "$W_PLATFORM" in
-        windows_cmd|wine_cmd) cmdc="cmd /c";;
-        *) unset cmdc ;;
+        windows_cygwin|wine_cmd) cmdc="cmd /c" ;;
+        nix_linux|nix_freebsd|nix_darwin) unset cmdc ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in w_try_regedit32()" ;;
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in w_try_regedit32()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' parsed in w_try_regedit32()"
     esac
 
     # shellcheck disable=SC2086
@@ -544,8 +956,11 @@ w_try_regedit64()
 {
     # on windows, doesn't work without cmd /c
     case "$W_PLATFORM" in
-        windows_cmd|wine_cmd) cmdc="cmd /c";;
-        *) unset cmdc ;;
+        windows_cygwin|wine_cmd) cmdc="cmd /c" ;;
+        nix_linux|nix_freebsd|nix_darwin) unset cmdc ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in w_try_regedit64()" ;;
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in w_try_regedit64()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' parsed in w_try_regedit64()"
     esac
 
     # shellcheck disable=SC2086
@@ -699,16 +1114,19 @@ winetricks_wintounix()
 w_pathconv()
 {
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin)
             # for some reason, cygpath turns some spaces into newlines?!
             cygpath "$@" | tr '\012' '\040' | sed 's/ $//'
             ;;
-        *)
+        windows_windows) w_die fixme "w_pathconv for $1 not implemented" ;;
+        nix_redox) w_die fixme "w_pathconv for $1 not implemented" ;;
+        nix_linux|nix_freebsd|nix_darwin)
             case "$@" in
                 -u?c:\\*|-u?C:\\*|-u?c:/*|-u?C:/*) winetricks_wintounix "$2" ;;
                 *) winetricks_early_wine winepath "$@" ;;
             esac
         ;;
+        *) w_die 255 "Unknown platform in w_pathconv() : $W_PLATFORM"
     esac
 }
 
@@ -718,14 +1136,38 @@ w_expand_env()
     winetricks_early_wine cmd.exe /c echo "%$1%"
 }
 
+# Check if $1 is executable (output custom message using w_debug if $2 is specified) and return 126 (standart non-executable exit code) or 0 if executable
+w_check_exec()
+{
+    w_executable="$1"
+    w_message="$2"
+    [ -n "$w_executable" ] && shift 1
+    [ -n "$w_message" ] && shift 1
+
+    if ! command -v "$w_executable" 2>/dev/null; then
+        if [ -n "$w_message" ]; then
+            printf '%s\n' "$w_message"
+            return 126
+        elif [ -z "$w_message" ]; then
+            printf '%s\n' "Command $w_executable is not executable"
+            return 126
+        fi
+    elif command -v "$w_executable" 2>/dev/null; then
+        w_debug "Command '$w_executable' is executable"
+        return 0
+    fi
+
+    unset w_executable w_message
+}
+
 # Get the latest tagged release from github.com API
 w_get_github_latest_release()
 {
-    # $1 - github organization
-    # $2 - github repository
     # FIXME: can we get releases that aren't on master branch?
+    org="$1"
+    repo="$2"
 
-    WINETRICKS_SUPER_QUIET=1 w_download_to "${W_TMP_EARLY}" "https://api.github.com/repos/$1/$2/releases/latest" "" "release.json" >/dev/null 2>&1
+    WINETRICKS_SUPER_QUIET=1 w_download_to "${W_TMP_EARLY}" "https://api.github.com/repos/${org}/${repo}/releases/latest" "" "release.json" >/dev/null 2>&1
 
     # aria2c condenses the json (https://github.com/aria2/aria2/issues/1389)
     # but curl/wget don't, so handle both cases:
@@ -733,6 +1175,26 @@ w_get_github_latest_release()
     case "$json_length" in
         0*) latest_version="$(sed -e "s/\",\"/|/g" "${W_TMP_EARLY}/release.json" | tr '|' '\n' | grep tag_name | sed 's@.*"@@')";;
         *) latest_version="$(grep -w tag_name "${W_TMP_EARLY}/release.json" | cut -d '"' -f 4)";;
+    esac
+
+    echo "$latest_version"
+}
+
+# Get the latest tagged prerelease from github.com API
+w_get_github_latest_prerelease()
+{
+    # FIXME: can we get releases that aren't on master branch?
+    org="$1"
+    repo="$2"
+
+    WINETRICKS_SUPER_QUIET=1 w_download_to "${W_TMP_EARLY}" "https://api.github.com/repos/${org}/${repo}/releases" "" "release.json" >/dev/null 2>&1
+
+    # aria2c condenses the json (https://github.com/aria2/aria2/issues/1389)
+    # but curl/wget don't, so handle both cases:
+    json_length="$(wc -l "${W_TMP_EARLY}/release.json")"
+    case "$json_length" in
+        0*) latest_version="$(sed -e "s/\",\"/|/g" "${W_TMP_EARLY}/release.json" | tr '|' '\n' | grep tag_name -m 1 | sed 's@.*"@@')";;
+        *) latest_version="$(grep -m 1 -w tag_name "${W_TMP_EARLY}/release.json" | cut -d '"' -f 4)";;
     esac
 
     echo "$latest_version"
@@ -888,44 +1350,45 @@ w_dotnet_verify()
         dotnet48) version="4.8" ;;
         *) echo error ; exit 1 ;;
     esac
-            w_call dotnet_verifier
 
-            # FIXME: The logfile may be useful somewhere (or at least print the location)
+    w_call dotnet_verifier
 
-            # for 'run, netfx_setupverifier.exe /q:a /c:"setupverifier2.exe"' line
-            # shellcheck disable=SC2140
-            w_ahk_do "
-                SetTitleMatchMode, 2
-                ; FIXME; this only works the first time? Check if it's already verified somehow..
+    # FIXME: The logfile may be useful somewhere (or at least print the location)
 
-                run, netfx_setupverifier.exe /q:a /c:"setupverifier2.exe"
-                winwait, Verification Utility
-                ControlClick, Button1
-                Control, ChooseString, NET Framework $version, ComboBox1
-                ControlClick, Button1 ; Verify
-                loop, 60
-                {
-                    sleep 1000
-                    process, exist, setupverifier2.exe
-                    dn_pid=%ErrorLevel%
-                    if dn_pid = 0
-                    {
-                        break
-                    }
-                    ifWinExist, Verification Utility, Product verification failed
-                    {
-                        process, close, setupverifier2.exe
-                        exit 1
-                    }
-                    ifWinExist, Verification Utility, Product verification succeeded
-                    {
-                        process, close, setupverifier2.exe
-                        break
-                    }
-                }
-            "
-            dn_status="$?"
-            w_info ".Net Verifier returned $dn_status"
+    # for 'run, netfx_setupverifier.exe /q:a /c:"setupverifier2.exe"' line
+    # shellcheck disable=SC2140
+    w_ahk_do "
+        SetTitleMatchMode, 2
+        ; FIXME; this only works the first time? Check if it's already verified somehow..
+
+        run, netfx_setupverifier.exe /q:a /c:"setupverifier2.exe"
+        winwait, Verification Utility
+        ControlClick, Button1
+        Control, ChooseString, NET Framework $version, ComboBox1
+        ControlClick, Button1 ; Verify
+        loop, 60
+        {
+            sleep 1000
+            process, exist, setupverifier2.exe
+            dn_pid=%ErrorLevel%
+            if dn_pid = 0
+            {
+                break
+            }
+            ifWinExist, Verification Utility, Product verification failed
+            {
+                process, close, setupverifier2.exe
+                exit 1
+            }
+            ifWinExist, Verification Utility, Product verification succeeded
+            {
+                process, close, setupverifier2.exe
+                break
+            }
+        }
+    "
+    dn_status="$?"
+    w_info ".Net Verifier returned $dn_status"
 }
 
 # Checks if the user can run the self-update/rollback commands
@@ -1500,6 +1963,18 @@ w_steam_getid()
     fi
 }
 
+# Usage: w_uplay_install_game [GAME_ID]
+## Relevant: https://github.com/Haoose/UPLAY_GAME_ID
+w_uplay_install_game()
+{
+    uplayapp="$1"
+
+    w_call 'uplay'
+    w_try "$WINE" 'start' "uplay://launch/$uplayapp"
+
+    unset uplayapp
+}
+
 # Usage:
 # w_steam_install_game steamidnum windowtitle
 w_steam_install_game()
@@ -1760,7 +2235,7 @@ _EOF_
 w_skip_windows()
 {
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin|windows_windows)
             echo "Skipping operation '$1' on Windows"
             return 0
             ;;
@@ -2546,10 +3021,10 @@ w_wine_version_in()
 # the environment variable WINETRICKS_BLACKLIST to disable it.
 w_workaround_wine_bug()
 {
-    if test "$WINE" = ""; then
-        echo "No need to work around wine bug $1 on Windows"
-        return 1
-    fi
+    case "$W_PLATFORM" in
+        windows_*) echo "No need to work around wine bug $1 on Windows" ; return 1
+    esac
+
     case "$2" in
         [0-9]*) w_die "bug: want message in w_workaround_wine_bug arg 2, got $2" ;;
         "") _W_msg="";;
@@ -2637,13 +3112,15 @@ w_metadata()
 
     # Do sanity check unless running on Cygwin, where it's way too slow.
     case "$W_PLATFORM" in
-        windows_cmd)
-            ;;
-        *)
+        windows_cygwin) w_warn "FIXME: Sanity check for w_metadata() is too slow, skipping.." ;;
+        windows_windows) w_die "FIXME: Platform $W_PLATFORM is not implemtented in w_metadata()" ;;
+        nix_redox) w_die "FIXME: Platform $W_PLATFORM is not implemtented in w_metadata()" ;;
+        nix_linux|nix_freebsd|nix_darwin)
             if grep '[^"]$' "$file"; then
                 w_die "bug: w_metadata $_W_md_cmd corrupt, might need forward slashes?"
             fi
-            ;;
+        ;;
+        *) w_die "Unknown W_PLATFORM '$W_PLATFORM' detected in w_metadata()"
     esac
     unset _W_md_cmd
 
@@ -2729,8 +3206,8 @@ w_do_call()
 
         # If needed, set the app's wineprefix
         case "$W_PLATFORM" in
-            windows_cmd|wine_cmd) ;;
-            *)
+            windows_cygwin|windows_windows|wine_cmd) ;;
+            nix_linux|nix_freebsd|nix_darwin)
                 # shellcheck disable=SC2154
                 case "${category}-${WINETRICKS_OPT_SHAREDPREFIX}" in
                     apps-0|benchmarks-0|games-0)
@@ -2742,6 +3219,8 @@ w_do_call()
                         ;;
                 esac
             ;;
+            nix_redox) w_die "FIXME: Platform '$W_PLATFORM' is not implemented in w_do_call()" ;;
+            *) w_die "Unknown platform detected in w_do_call() : $W_PLATFORM"
         esac
 
         test "$W_OPT_NOCLEAN" = 1 || rm -rf "$W_TMP"
@@ -2774,6 +3253,40 @@ w_do_call()
             chmod +x "$postfile"
             # shellcheck disable=SC1090
             . "$postfile"
+        fi
+
+        # Generate shortcut in $WINEPREFIX/${W_PACKAGE}_shortcut.sh
+        # shellcheck disable=SC2154
+        if [ ! -e "$WINEPREFIX/${W_PACKAGE}_shortcut.sh" ] && [ -z "$winetricks_do_not_generate_shortcut" ] && [ -n "$installed_exe1" ]; then
+            printf '%s\n' "Creating a new shortcut in $WINEPREFIX/$installed_exe1"
+            # Generate shortcut
+            printf '%s\n' \
+                "#!/bin/sh" \
+                '(' \
+                "  export WINEPREFIX=\"$WINEPREFIX\"" \
+                "  export WINEDEBUG=\"-all\"" \
+                "  export DXVK_HUD=\"fps\"" \
+                "  \"$WINE\" start \"$installed_exe1\"" \
+                ")" \
+            > "$WINEPREFIX/${W_PACKAGE}_shortcut.sh"
+            # Set executable permission
+            [ ! -x "$WINEPREFIX/${W_PACKAGE}_shortcut.sh" ] && chmod +x "$WINEPREFIX/${W_PACKAGE}_shortcut.sh"
+        # If $installed_exe1 is blank
+        elif [ ! -e "$WINEPREFIX/${W_PACKAGE}_shortcut.sh" ] && [ -z "$installed_exe1" ]; then
+            w_debug "w_generate_shortcut: Unable to generate a shortcut, because installed_exe1 variable '$installed_exe1' is blank"
+        # If $WINEPREFIX is blank
+        elif [ ! -e "$WINEPREFIX/${W_PACKAGE}_shortcut.sh" ] && [ -z "$WINEPREFIX" ]; then
+            w_debug "w_generate_shortcut: Unable to generate a shortcut, because WINEPREFIX variable '$WINEPREFIX' is blank"
+        # If already exists
+        elif [ -e "$WINEPREFIX/${W_PACKAGE}_shortcut.sh" ]; then
+            w_debug "w_generate_shortcut: File '$WINEPREFIX/${W_PACKAGE}_shortcut.sh' already exists"
+        # If overrriden
+        elif [ -n "$winetricks_do_not_generate_shortcut" ]; then
+            w_debug "w_generate_shortcut: variable winetricks_do_not_generate_shortcut '$winetricks_do_not_generate_shortcut' is non-zero, skipping creation of shortcut"
+        # Sanitization for executable permission
+        elif [ ! -x "$WINEPREFIX/${W_PACKAGE}_shortcut.sh" ]; then
+            w_debug "w_generate_shortcut: File '$WINEPREFIX/${W_PACKAGE}_shortcut.sh' is not executable, fixing.."
+            chmod +x "$WINEPREFIX/${W_PACKAGE}_shortcut.sh"
         fi
 
         # Verify install
@@ -3025,20 +3538,58 @@ winetricks_get_sha256sum_prog() {
     fi
 }
 
+# Get running platform in W_PLATFORM and return it in a form of [nix|windows]_[kernel_used]
 winetricks_get_platform()
 {
-    if [ "${OS}" = "Windows_NT" ]; then
-        if [ -n "${WINELOADERNOEXEC}" ]; then
-            # Windows/Cygwin
-            export W_PLATFORM="windows_cmd"
-        else
-            # wineconsole/cmd under wine
-            export W_PLATFORM="wine_cmd"
-        fi
-    else
-        # Normal Unix shell
-        export W_PLATFORM="wine"
-    fi
+  # Linux - `uname` returns 'GNU/Linux'
+  if [ "$(uname -s)" = "Linux" ]; then
+    export W_PLATFORM="nix_linux"
+    return 0
+
+  # FreeBSD - `uname` returns 'FreeBSD'
+  elif [ "$(uname -s)" = "FreeBSD" ]; then
+    export W_PLATFORM="nix_freebsd"
+    return 0
+
+  # Redox - `uname` returns 'Redox'
+  elif [ "$(uname -s)" = "Redox" ]; then
+    export W_PLATFORM="nix_redox"
+    return 0
+
+  # Cygwin - `uname -o` returns 'Cygwin'
+  # `uname -o` on macOS is invalid, do not output error if invoked (https://github.com/Winetricks/winetricks/pull/1415#issuecomment-549769127)
+  elif [ "$(uname -o 2>/dev/null)" = "Cygwin" ]; then
+    export W_PLATFORM="windows_cygwin"
+    return 0
+
+  # MacOS - `uname` returns 'Darwin'
+  elif [ "$(uname -s)" = "Darwin" ]; then
+    export W_PLATFORM="nix_darwin"
+    return 0
+
+  # Windows - Impossible to get?
+  elif [ "$(uname)" = "Windows" ]; then
+    w_warn "How did you execute POSIX shell on native Windows? File an issue for compatibility"
+    export W_PLATFORM="windows_windows"
+    return 0
+
+  # WineCMD/CMD
+  elif [ "$OS" = "Windows_NT" ] && [ -z "$(uname)" ]; then
+    export W_PLATFORM="wine_cmd"
+    return 0
+
+  else
+   # WSL - `uname -r` returns `4.4.0-18362-Microsoft` where 4.4.0 is kernel version and 18362 windows build(?)
+   ## $OS is blank on WSL (10/2019)
+   case "$(uname -r)" in
+     *-Microsoft)
+      export W_PLATFORM="windows_wsl"
+      return 0
+   esac
+  fi
+
+  # Logic-check
+  [ -z "$W_PLATFORM" ] && w_die "Function winetricks_get_platform is unable to get W_PLATFORM variable"
 }
 
 winetricks_latest_version_check()
@@ -4050,7 +4601,7 @@ winetricks_is_installed()
     fi
 
     case "$W_PLATFORM" in
-        windows_cmd|wine_cmd)
+        windows_cygwin|windows_windows|wine_cmd)
             # On Windows, there's no wineprefix, just check if file's there
             _W_file_unix="$(w_pathconv -u "$_W_file")"
             if test -f "$_W_file_unix"; then
@@ -4058,7 +4609,7 @@ winetricks_is_installed()
                 return 0  # installed
             fi
             ;;
-        *)
+        nix_linux|nix_freebsd|nix_darwin)
             # Compute wineprefix for this app
             case "${category}-${WINETRICKS_OPT_SHAREDPREFIX}" in
                 apps-0|benchmarks-0|games-0)
@@ -4085,6 +4636,8 @@ winetricks_is_installed()
              IFS="$_W_IFS"
             fi
             ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_is_installed()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' used in winetricks_is_installed"
     esac
     unset _W_file _W_prefix _W_IFS  # leak _W_file_unix for caller. Is this wise?
     return 1  # not installed
@@ -4812,10 +5365,13 @@ winetricks_set_wineprefix()
     esac
 
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin)
             W_DRIVE_C="/cygdrive/c" ;;
-        *)
+        windows_windows) w_die "FIXME: Platform '$W_PLATFORM' is not implemtented in winetricks_set_wineprefix()" ;;
+        nix_redox) w_die "FIXME: Platform '$W_PLATFORM' is not implemtented in winetricks_set_wineprefix()" ;;
+        nix_linux|nix_freebsd|nix_darwin)
             W_DRIVE_C="$WINEPREFIX/dosdevices/c:" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' was used in winetricks_set_wineprefix()"
     esac
 
     # Kludge: use Temp instead of temp to avoid \t expansion in w_try
@@ -4831,8 +5387,8 @@ winetricks_set_wineprefix()
     fi
 
     case "$W_PLATFORM" in
-        "windows_cmd|wine_cmd") W_CACHE_WIN="$(w_pathconv -w "$W_CACHE")" ;;
-        *)
+        windows_cygwin|windows_windows|wine_cmd) W_CACHE_WIN="$(w_pathconv -w "$W_CACHE")" ;;
+        nix_linux|nix_freebsd|nix_darwin)
             # For case where Z: doesn't exist or / is writable (!),
             # make a drive letter for W_CACHE.  Clean it up on exit.
             test "$WINETRICKS_CACHE_SYMLINK" && rm -f "$WINETRICKS_CACHE_SYMLINK"
@@ -4847,6 +5403,8 @@ winetricks_set_wineprefix()
             done
             W_CACHE_WIN="${letter}:"
             ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_set_wineprefix()" ;;
+        *) w_die "Unknown platform ($W_PLATFORM) detected in winetricks_set_wineprefix()"
     esac
 
     W_COMMONFILES_X86_WIN="$(w_expand_env CommonProgramFiles)"
@@ -4968,7 +5526,7 @@ winetricks_annihilate_wineprefix()
     rm -rf "$WINEPREFIX"
 
     # Also remove menu items.
-    find "$XDG_DATA_HOME/applications/wine" -type f -name '*.desktop' -exec grep -q -l "$WINEPREFIX" '{}' ';' -exec rm '{}' ';'
+    find "$XDG_DATA_HOME/applications" -type f -name '*.desktop' -exec grep -q -l "$WINEPREFIX" '{}' ';' -exec rm '{}' ';'
 
     # Also remove desktop items.
     # Desktop might be synonym for home directory, so only go one level
@@ -5033,11 +5591,10 @@ winetricks_init()
     # whether to use shared wineprefix (1) or unique wineprefix for each app (0)
     WINETRICKS_OPT_SHAREDPREFIX=${WINETRICKS_OPT_SHAREDPREFIX:-0}
 
-    WINETRICKS_SOURCEFORGE=https://downloads.sourceforge.net
-
     winetricks_get_sha256sum_prog
 
-    winetricks_get_platform
+    # winetricks_get_platform got updated and in addition to W_PLATFORM export it outputs the platform which seems unexpected here
+    winetricks_get_platform 2>&1 /dev/null
 
     #---- Public Variables ----
 
@@ -5094,7 +5651,7 @@ winetricks_init()
 
     # System-specific variables
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin)
             WINE=""
             WINE64=""
             WINE_ARCH=""
@@ -5102,7 +5659,8 @@ winetricks_init()
             WINESERVER=""
             W_DRIVE_C="C:/"
             ;;
-        *)
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_init()" ;;
+        nix_linux|nix_freebsd|nix_darwin)
             WINE="${WINE:-wine}"
             # Find wineserver.
             # Some distributions (Debian before wine 1.8-2) don't have it on the path.
@@ -5111,6 +5669,7 @@ winetricks_init()
                 "${WINE}server" \
                 "$(command -v wineserver 2> /dev/null)" \
                 "$(dirname $WINE)/server/wineserver" \
+                "$(find $(dirname $WINE) -name wineserver -type f)" \
                 /usr/bin/wineserver-development \
                 /usr/lib/wine/wineserver \
                 /usr/lib/i386-kfreebsd-gnu/wine/wineserver \
@@ -5154,6 +5713,8 @@ winetricks_init()
                 fi
                 unset _abswine
                 ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_init()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' used in winetricks_init()"
     esac
 
     winetricks_set_wineprefix "$1"
@@ -5184,8 +5745,10 @@ winetricks_init()
         w_warn "Your version of wine $_wine_version_stripped is no longer supported upstream. You should upgrade to 4.x"
     fi
 
+    # Output Header informing about used wine and checksum
     if [ -z "$WINETRICKS_SUPER_QUIET" ] ; then
-        echo "Using winetricks $(winetricks_print_version) with ${WINETRICKS_ORIG_WINE_VERSION} and WINEARCH=${W_ARCH}"
+        winetricks_get_platform
+        printf '%s\n' "Using kreytricks $(winetricks_print_version) on platform $W_PLATFORM with $WINETRICKS_ORIG_WINE_VERSION and WINEARCH=$W_ARCH on WINEPREFIX=$([ -n "$WINEPREFIX" ] && { printf '%s\n' "$WINEPREFIX" ;} || printf '%s\n' "$HOME/.wine") $([ -n "$WINEDEBUG" ] && printf '%s\n' "including WINEDEBUG=$WINEDEBUG")"
     fi
 
     winetricks_latest_version_check
@@ -5261,7 +5824,7 @@ Executes given verbs.  Each verb installs an application or changes a setting.
 
 Options:
     --country=CC      Set country code to CC and don't detect your IP address
-    --force           Don't check whether packages were already installed
+-f,  --force           Don't check whether packages were already installed
     --gui             Show gui diagnostics even when driven by commandline
     --isolate         Install each app or game in its own bottle (WINEPREFIX)
     --self-update     Update this application to the last version
@@ -5302,7 +5865,7 @@ winetricks_handle_option()
 {
     case "$1" in
         --country=*) W_COUNTRY="${1##--country=}" ;;
-        --force) WINETRICKS_FORCE=1;;
+        --force|-f) WINETRICKS_FORCE=1;;
         --gui) winetricks_detect_gui;;
         -h|--help) winetricks_usage ; exit 0 ;;
         --isolate) WINETRICKS_OPT_SHAREDPREFIX=0 ;;
@@ -5688,7 +6251,7 @@ load_cnc_ddraw()
 {
     # Note: only works if ddraw.ini contains settings for the executable
     w_download https://github.com/CnCNet/cnc-ddraw/releases/download/1.3.4.0/cnc-ddraw.zip c1f85053223ab04a573cc482b43b93a58077e928a401f3364c9dc5542ad090ae
-    w_try_unzip "$W_SYSTEM32_DLLS" "$W_CACHE/$W_PACKAGE/$file1"
+    w_extractor "$W_CACHE/$W_PACKAGE/$file1" "$W_SYSTEM32_DLLS"
 
     w_override_dlls native,builtin ddraw
 }
@@ -5709,12 +6272,12 @@ load_comctl32()
     # 2011/01/17: https://www.microsoft.com/en-us/download/details.aspx?id=14672
     # 2012/08/11: w_download https://download.microsoft.com/download/platformsdk/redist/5.80.2614.3600/w9xnt4/en-us/cc32inst.exe d68c0cca721870aed39f5f2efd80dfb74f3db66d5f9a49e7578b18279edfa4a7
     # 2016/01/07: w_download ftp://ftp.ie.debian.org/disk1/download.sourceforge.net/pub/sourceforge/p/po/pocmin/Win%2095_98%20Controls/Win%2095_98%20Controls/CC32inst.exe
-    # 2017/03/12: w_download $WINETRICKS_SOURCEFORGE/project/pocmin/Win%2095_98%20Controls/Win%2095_98%20Controls/CC32inst.exe
+    # 2017/03/12: w_download https://downloads.sourceforge.net/project/pocmin/Win%2095_98%20Controls/Win%2095_98%20Controls/CC32inst.exe
 
-    w_download $WINETRICKS_SOURCEFORGE/project/pocmin/Win%2095_98%20Controls/Win%2095_98%20Controls/CC32inst.exe d68c0cca721870aed39f5f2efd80dfb74f3db66d5f9a49e7578b18279edfa4a7
+    w_download https://downloads.sourceforge.net/project/pocmin/Win%2095_98%20Controls/Win%2095_98%20Controls/CC32inst.exe d68c0cca721870aed39f5f2efd80dfb74f3db66d5f9a49e7578b18279edfa4a7
 
     w_try "$WINE" "$W_CACHE"/comctl32/cc32inst.exe "/T:$W_TMP_WIN" /c $W_UNATTENDED_SLASH_Q
-    w_try_unzip "$W_TMP" "$W_TMP"/comctl32.exe
+    w_extractor "$W_TMP"/comctl32.exe "$W_TMP"
     w_try "$WINE" "$W_TMP"/x86/50ComUpd.Exe "/T:$W_TMP_WIN" /c $W_UNATTENDED_SLASH_Q
     w_try cp "$W_TMP"/comcnt.dll "$W_SYSTEM32_DLLS"/comctl32.dll
 
@@ -5802,7 +6365,7 @@ load_binkw32()
 
     w_download http://www.down-dll.com/dll/b/__32-binkw32.dll3.0.0.0.zip 1d5efda8e4af796319b94034ba67b453cbbfddd81eb7d94fd059b40e237fa75d
 
-    w_try_unzip "$W_TMP" "$W_CACHE"/binkw32/__32-binkw32.dll3.0.0.0.zip
+    w_extractor "$W_CACHE/binkw32/__32-binkw32.dll3.0.0.0.zip" "$W_TMP"
     w_try cp "$W_TMP"/binkw32.dll "$W_SYSTEM32_DLLS"/binkw32.dll
 
     w_override_dlls native binkw32
@@ -6653,10 +7216,12 @@ load_dxsdk_nov2006()
     # dxview.dll uses mfc42u while registering
     w_call mfc42
 
-    w_try_cabextract "$W_CACHE"/dxsdk_nov2006/dxsdk_aug2006.exe
-    w_try_unzip "$W_TMP" dxsdk.exe
-    w_try_cd "$W_TMP"
-    w_try "$WINE" msiexec /i Microsoft_DirectX_SDK.msi $W_UNATTENDED_SLASH_Q
+    # Extract
+    w_extractor "$W_CACHE/$W_PACKAGE/dxsdk_aug2006.exe" "$W_TMP"
+    w_extractor "$W_TMP/dxsdk.exe" "$W_TMP"
+
+    # Execute
+    w_try "$WINE" msiexec /i "$W_TMP/Microsoft_DirectX_SDK.msi" "$W_UNATTENDED_SLASH_Q"
 }
 
 #----------------------------------------------------------------
@@ -6732,7 +7297,7 @@ helper_dxvk_d9vk()
     fi
 
     if [ "${_W_package_version}" = "master" ]; then
-        w_try_unzip "$W_TMP" "${W_CACHE}/${W_PACKAGE}/${_W_package_archive}"
+        w_extractor "$W_CACHE/$W_PACKAGE/$_W_package_archive" "$W_TMP"
     else
         w_try_cd "${W_TMP}"
         w_try tar -zxf "${W_CACHE}/${W_PACKAGE}/${_W_package_archive}"
@@ -6879,6 +7444,91 @@ load_d9vk020()
     # https://github.com/Joshua-Ashton/d9vk
     w_download "https://github.com/Joshua-Ashton/d9vk/releases/download/0.20/d9vk-0.20.tar.gz" bd53c17eafeffcf2251d3911b7814b92c8f7e4c6b7364217da38645093a1db35
     helper_dxvk_d9vk "$file1" "4.5" "1.1.104" "dxgi,d3d9,d3d10,d3d11"
+}
+
+w_metadata d9vk021 dlls \
+    title="Vulkan-based D3D9/D3D10/D3D11 implementation for Linux / Wine (0.21)" \
+    publisher="Joshua Ashton" \
+    year="2019" \
+    media="download" \
+    file1="d9vk-0.21.tar.gz" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d9.dll" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d10.dll" \
+    installed_file2="$W_SYSTEM32_DLLS_WIN/d3d10_1.dll" \
+    installed_file3="$W_SYSTEM32_DLLS_WIN/d3d10core.dll" \
+    installed_file4="$W_SYSTEM32_DLLS_WIN/d3d11.dll" \
+    installed_file5="$W_SYSTEM32_DLLS_WIN/dxgi.dll"
+
+load_d9vk021()
+{
+    # https://github.com/Joshua-Ashton/d9vk
+    w_download "https://github.com/Joshua-Ashton/d9vk/releases/download/0.21/d9vk-0.21.tar.gz" e58d11733b6471718b4652e5be66bfd1a4d908d0ddf96be0ecb9efb2fb748055
+    helper_dxvk_d9vk "$file1" "4.5" "1.1.104" "dxgi,d3d9,d3d10,d3d11"
+}
+
+w_metadata d9vk022 dlls \
+    title="Vulkan-based D3D9/D3D10/D3D11 implementation for Linux / Wine (0.22)" \
+    publisher="Joshua Ashton" \
+    year="2019" \
+    media="download" \
+    file1="d9vk-0.22.tar.gz" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d9.dll" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d10.dll" \
+    installed_file2="$W_SYSTEM32_DLLS_WIN/d3d10_1.dll" \
+    installed_file3="$W_SYSTEM32_DLLS_WIN/d3d10core.dll" \
+    installed_file4="$W_SYSTEM32_DLLS_WIN/d3d11.dll" \
+    installed_file5="$W_SYSTEM32_DLLS_WIN/dxgi.dll"
+
+load_d9vk022()
+{
+    # https://github.com/Joshua-Ashton/d9vk
+    w_download "https://github.com/Joshua-Ashton/d9vk/releases/download/0.22/d9vk-0.22.tar.gz" 45d2b5d20cd6d96a43673b999814d3d9d3e64360a514757df3ef49b9a28ae65a
+    helper_dxvk_d9vk "$file1" "4.5" "1.1.104" "dxgi,d3d9,d3d10,d3d11"
+}
+
+w_metadata d9vk030 dlls \
+    title="Vulkan-based D3D9/D3D10/D3D11 implementation for Linux / Wine (0.30)" \
+    publisher="Joshua Ashton" \
+    year="2019" \
+    media="download" \
+    file1="d9vk-0.30.tar.gz" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d9.dll" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d10.dll" \
+    installed_file2="$W_SYSTEM32_DLLS_WIN/d3d10_1.dll" \
+    installed_file3="$W_SYSTEM32_DLLS_WIN/d3d10core.dll" \
+    installed_file4="$W_SYSTEM32_DLLS_WIN/d3d11.dll" \
+    installed_file5="$W_SYSTEM32_DLLS_WIN/dxgi.dll"
+
+load_d9vk030()
+{
+    # https://github.com/Joshua-Ashton/d9vk
+    w_download "https://github.com/Joshua-Ashton/d9vk/releases/download/0.30/d9vk-0.30.tar.gz" 9654b888665184bf795aa33a0c7287d04666ebe21e56e53df0f6c331fde24927
+    helper_dxvk_d9vk "$file1" "4.5" "1.1.104" "dxgi,d3d9,d3d10,d3d11"
+}
+
+
+#----------------------------------------------------------------
+
+w_metadata d9vk dlls \
+    title="Vulkan-based D3D9/D3D10/D3D11 implementation for Linux / Wine (latest)" \
+    publisher="Joshua Ashton" \
+    year="2019" \
+    media="download" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d9.dll" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d10.dll" \
+    installed_file2="$W_SYSTEM32_DLLS_WIN/d3d10_1.dll" \
+    installed_file3="$W_SYSTEM32_DLLS_WIN/d3d10core.dll" \
+    installed_file4="$W_SYSTEM32_DLLS_WIN/d3d11.dll" \
+    installed_file5="$W_SYSTEM32_DLLS_WIN/dxgi.dll"
+
+load_d9vk()
+{
+    # https://github.com/Joshua-Ashton/d9vk
+    _W_d9vk_version="$(w_get_github_latest_prerelease Joshua-Ashton d9vk)"
+    _W_d9vk_version="${_W_d9vk_version#v}"
+    w_linkcheck_ignore=1 w_download "https://github.com/Joshua-Ashton/d9vk/releases/download/${_W_d9vk_version}/d9vk-${_W_d9vk_version}.tar.gz"
+    helper_dxvk_d9vk "d9vk-${_W_d9vk_version}.tar.gz" "4.5" "1.1.104" "dxgi,d3d9,d3d10,d3d11"
+    unset _W_d9vk_version
 }
 
 
@@ -7545,6 +8195,86 @@ load_dxvk140()
     helper_dxvk_d9vk "$file1" "4.5" "1.1.113" "dxgi,d3d10,d3d11"
 }
 
+w_metadata dxvk141 dlls \
+    title="Vulkan-based D3D10/D3D11 implementation for Linux / Wine (1.4.1)" \
+    publisher="Philip Rebohle" \
+    year="2017" \
+    media="download" \
+    file1="dxvk-1.4.1.tar.gz" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d10.dll" \
+    installed_file2="$W_SYSTEM32_DLLS_WIN/d3d10_1.dll" \
+    installed_file3="$W_SYSTEM32_DLLS_WIN/d3d10core.dll" \
+    installed_file4="$W_SYSTEM32_DLLS_WIN/d3d11.dll" \
+    installed_file5="$W_SYSTEM32_DLLS_WIN/dxgi.dll"
+
+load_dxvk141()
+{
+    # https://github.com/doitsujin/dxvk
+    w_download "https://github.com/doitsujin/dxvk/releases/download/v1.4.1/dxvk-1.4.1.tar.gz" 574ec4dc5201e45d70472228f0c6695426f0392503ec7a47d6092600aac53a07
+    # FIXME: The current Wine release (4.15) does not include the latest Vulkan 1.1.113 headers.
+    helper_dxvk_d9vk "$file1" "4.5" "1.1.113" "dxgi,d3d10,d3d11"
+}
+
+w_metadata dxvk142 dlls \
+    title="Vulkan-based D3D10/D3D11 implementation for Linux / Wine (1.4.2)" \
+    publisher="Philip Rebohle" \
+    year="2017" \
+    media="download" \
+    file1="dxvk-1.4.2.tar.gz" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d10.dll" \
+    installed_file2="$W_SYSTEM32_DLLS_WIN/d3d10_1.dll" \
+    installed_file3="$W_SYSTEM32_DLLS_WIN/d3d10core.dll" \
+    installed_file4="$W_SYSTEM32_DLLS_WIN/d3d11.dll" \
+    installed_file5="$W_SYSTEM32_DLLS_WIN/dxgi.dll"
+
+load_dxvk142()
+{
+    # https://github.com/doitsujin/dxvk
+    w_download "https://github.com/doitsujin/dxvk/releases/download/v1.4.2/dxvk-1.4.2.tar.gz" 5adfd71ee0299798af4402f09f113f88929af429b6889af334cff5b84b84dbe6
+    # FIXME: The current Wine release (4.15) does not include the latest Vulkan 1.1.113 headers.
+    helper_dxvk_d9vk "$file1" "4.5" "1.1.113" "dxgi,d3d10,d3d11"
+}
+
+w_metadata dxvk143 dlls \
+    title="Vulkan-based D3D10/D3D11 implementation for Linux / Wine (1.4.3)" \
+    publisher="Philip Rebohle" \
+    year="2017" \
+    media="download" \
+    file1="dxvk-1.4.3.tar.gz" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d10.dll" \
+    installed_file2="$W_SYSTEM32_DLLS_WIN/d3d10_1.dll" \
+    installed_file3="$W_SYSTEM32_DLLS_WIN/d3d10core.dll" \
+    installed_file4="$W_SYSTEM32_DLLS_WIN/d3d11.dll" \
+    installed_file5="$W_SYSTEM32_DLLS_WIN/dxgi.dll"
+
+load_dxvk143()
+{
+    # https://github.com/doitsujin/dxvk
+    w_download "https://github.com/doitsujin/dxvk/releases/download/v1.4.3/dxvk-1.4.3.tar.gz" e4b9e7fc8faf2dd1ddf5206e14939a822034a85778d54a6950767d68909726f7
+    # FIXME: The current Wine release (4.15) does not include the latest Vulkan 1.1.113 headers.
+    helper_dxvk_d9vk "$file1" "4.5" "1.1.113" "dxgi,d3d10,d3d11"
+}
+
+w_metadata dxvk144 dlls \
+    title="Vulkan-based D3D10/D3D11 implementation for Linux / Wine (1.4.4)" \
+    publisher="Philip Rebohle" \
+    year="2017" \
+    media="download" \
+    file1="dxvk-1.4.4.tar.gz" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d10.dll" \
+    installed_file2="$W_SYSTEM32_DLLS_WIN/d3d10_1.dll" \
+    installed_file3="$W_SYSTEM32_DLLS_WIN/d3d10core.dll" \
+    installed_file4="$W_SYSTEM32_DLLS_WIN/d3d11.dll" \
+    installed_file5="$W_SYSTEM32_DLLS_WIN/dxgi.dll"
+
+load_dxvk144()
+{
+    # https://github.com/doitsujin/dxvk
+    w_download "https://github.com/doitsujin/dxvk/releases/download/v1.4.4/dxvk-1.4.4.tar.gz" a845285c8dfc63c7d00c14520b58fc6048796fef69fea49617edb46662a0ba31
+    # FIXME: The current Wine release (4.15) does not include the latest Vulkan 1.1.113 headers.
+    helper_dxvk_d9vk "$file1" "4.5" "1.1.113" "dxgi,d3d10,d3d11"
+}
+
 
 #----------------------------------------------------------------
 
@@ -7792,19 +8522,24 @@ w_metadata dotnet11 dlls \
 
 load_dotnet11()
 {
-    # The installer itself doesn't support 64-bit
+    # The installer itself doesn't support 64-bit (?)
+    w_fixme "Verb dotnet11 is using 'w_package_unsupported_win64' which doesn't have reference"
     w_package_unsupported_win64
 
     # https://www.microsoft.com/en-us/download/details.aspx?id=26
     w_download https://download.microsoft.com/download/a/a/c/aac39226-8825-44ce-90e3-bf8203e74006/dotnetfx.exe ba0e58ec93f2ffd54fc7c627eeca9502e11ab3c6fc85dcbeff113bd61d995bce
 
+    # Removing mono since we are replacing mono libs with dotnet
     w_call remove_mono
+
+    w_fixme "Verb dotnet11 is calling 'corefonts' which doesn't have explanation"
     w_call corefonts
+
+    w_fixme "Verb dotnet11 is calling 'fontfix' which doesn't have explanation"
     w_call fontfix
 
-    w_try w_try_cd "$W_CACHE/$W_PACKAGE"
     # Use builtin regsvcs.exe to work around https://bugs.winehq.org/show_bug.cgi?id=25120
-    if test $W_OPT_UNATTENDED; then
+    if [ -n "$W_OPT_UNATTENDED" ];then
         WINEDLLOVERRIDES="regsvcs.exe=b" w_ahk_do "
             SetTitleMatchMode, 2
             run, dotnetfx.exe /q /C:\"install /q\"
@@ -7825,10 +8560,13 @@ load_dotnet11()
                 }
             }
         "
+    elif [ -z "$W_OPT_UNATTENDED" ]; then
+        WINEDLLOVERRIDES="regsvcs.exe=b" w_try "$WINE" "$W_CACHE/$W_PACKAGE/dotnetfx.exe"
     else
-        WINEDLLOVERRIDES="regsvcs.exe=b" w_try "$WINE" dotnetfx.exe
+        w_die 255 "dotnet11 - W_OPT_UNATTENDED"
     fi
 
+    w_fixme "Verb dotnet11 is using variable 'W_NGEN_CMD' which doesn't have explanation"
     W_NGEN_CMD="w_try $WINE $W_DRIVE_C/windows/Microsoft.NET/Framework/v1.1.4322/ngen.exe executequeueditems"
 }
 
@@ -7849,39 +8587,48 @@ w_metadata dotnet11sp1 dlls \
 
 load_dotnet11sp1()
 {
-    # The installer itself doesn't support 64-bit
+    # The installer itself doesn't support 64-bit (?)
+    w_fixme "Verb dotnet11sp1 is using 'w_package_unsupported_win64' which doesn't have reference"
     w_package_unsupported_win64
 
     w_download https://download.microsoft.com/download/8/b/4/8b4addd8-e957-4dea-bdb8-c4e00af5b94b/NDP1.1sp1-KB867460-X86.exe 2c0a35409ff0873cfa28b70b8224e9aca2362241c1f0ed6f622fef8d4722fd9a
 
+    # Removing mono since we are replacing mono libs with dotnet
     w_call remove_mono
+
+    w_fixme "Verb dotnet11sp1 is calling 'dotnet11' which doesn't have explanation"
     w_call dotnet11
 
-    w_try w_try_cd "$W_CACHE/$W_PACKAGE"
     # Use builtin regsvcs.exe to work around https://bugs.winehq.org/show_bug.cgi?id=25120
-    if test $W_OPT_UNATTENDED; then
-        WINEDLLOVERRIDES="regsvcs.exe=b" w_ahk_do "
-            SetTitleMatchMode, 2
-            run, NDP1.1sp1-KB867460-X86.exe /q /C:"install /q"
+    if w_workaround_wine_bug 25120; then
+      if [ -n "$W_OPT_UNATTENDED" ]; then
+          WINEDLLOVERRIDES="regsvcs.exe=b" w_ahk_do "
+              SetTitleMatchMode, 2
+              run, NDP1.1sp1-KB867460-X86.exe /q /C:"install /q"
 
-            Loop
-            {
-                sleep 1000
-                ifwinexist, Fatal error, Failed to delay load library
-                {
-                    WinClose, Fatal error, Failed to delay load library
-                    continue
-                }
-                Process, exist, dotnetfx.exe
-                dotnet_pid = %ErrorLevel%  ; Save the value immediately since ErrorLevel is often changed.
-                if dotnet_pid = 0
-                {
-                    break
-                }
-            }
-        "
+              Loop
+              {
+                  sleep 1000
+                  ifwinexist, Fatal error, Failed to delay load library
+                  {
+                      WinClose, Fatal error, Failed to delay load library
+                      continue
+                  }
+                  Process, exist, dotnetfx.exe
+                  dotnet_pid = %ErrorLevel%  ; Save the value immediately since ErrorLevel is often changed.
+                  if dotnet_pid = 0
+                  {
+                      break
+                  }
+              }
+          "
+      else
+          WINEDLLOVERRIDES="regsvcs.exe=b" w_try "$WINE" "$W_CACHE/$W_PACKAGE/NDP1.1sp1-KB867460-X86.exe"
+      fi
+    elif ! w_workaround_wine_bug 25120; then
+        w_debug "Not affected by winebug 25120, not seting regsvcs on builtin"
     else
-        WINEDLLOVERRIDES="regsvcs.exe=b" w_try "$WINE" "$W_CACHE"/dotnet11sp1/NDP1.1sp1-KB867460-X86.exe
+        w_die 255 "dotnet11sp1 - W_OPT_UNATTENDED"
     fi
 
     W_NGEN_CMD="w_try $WINE $W_DRIVE_C/windows/Microsoft.NET/Framework/v1.1.4322/ngen.exe executequeueditems"
@@ -7905,7 +8652,10 @@ w_metadata dotnet20 dlls \
 
 load_dotnet20()
 {
+    # Removing mono since we are replacing mono libs with dotnet
     w_call remove_mono
+
+    w_fixme "Verb dotnet20 is using 'w_call fontfix' which doesn't have reference"
     w_call fontfix
 
     if [ "$W_ARCH" = "win32" ]; then
@@ -7913,12 +8663,18 @@ load_dotnet20()
         w_download https://download.lenovo.com/ibmdl/pub/pc/pccbbs/thinkvantage_en/dotnetfx.exe 46693d9b74d12454d117cc61ff2e9481cabb100b4d74eb5367d3cf88b89a0e71
 
         # Needed for https://bugs.winehq.org/show_bug.cgi?id=12401
-        w_set_winver win2k
+        w_fixme "Set wine version for dotnetN20 since winebug 12401 is staged"
+        if w_workaround_wine_bug 12401; then
+            w_fixme "dotnet20 is using win2k environment wineprefix-wide, set this per executable only"
+            w_set_winver win2k
+        elif ! w_workaround_wine_bug 12401; then
+            w_debug "Verb dotnet20 is not affected by winebug 12401, not seting windows environment on win2k"
+        fi
 
-        # if dotnet11 if installed there is a warning dialog, but it still verifies
-        # dotnet11 doesn't work on 64-bit, so no need to run there
-        w_try_cd "$W_CACHE/$W_PACKAGE"
-        if [ -n "${W_OPT_UNATTENDED}" ]; then
+        # if dotnet11 if installed there is a warning dialog, but it still verifies (?)
+        # dotnet11 doesn't work on 64-bit, so no need to run there (?)
+        w_fixme "dotnet11 doesn't work on 64-bit, reference needed"
+        if [ -n "$W_OPT_UNATTENDED" ]; then
             w_ahk_do "
                 SetTitleMatchMode, 2
                 ; FIXME: this isn't silent?
@@ -7942,18 +8698,38 @@ load_dotnet20()
                 }
             "
         else
-            "$WINE" dotnetfx.exe ${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}
+            "$WINE" "$W_CACHE/$W_PACKAGE/$file1" "${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}"
             status=$?
         fi
 
         case $status in
-            0) ;;
-            105) echo "exit status $status - normal, user selected 'restart now'" ;;
-            194) echo "exit status $status - normal, user selected 'restart later'" ;;
-            *) w_die "exit status $status - $W_PACKAGE installation failed" ;;
+            0)
+                case $LANG in
+                    en*) w_debug "File $file1 used in dotnet20 verb returned true" ;;
+                    *) w_debug "File $file1 used in dotnet20 verb returned true$untranslated"
+                esac
+            ;;
+            105)
+                case $LANG in
+                    en*) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart now' which is ignored by wine" ;;
+                    *) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart now' which is ignored by wine$untranslated" ;;
+                esac
+            ;;
+            194)
+                case $LANG in
+                    en*) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart later' which is normal" ;;
+                    *) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart later' which is normal$untranslated"
+                esac
+            ;;
+            *)
+                case $LANG in
+                    en*) w_die "File $file1 returned $status in verb dotnet20 which is unexpected, please file a bug with steps to reproduce" ;;
+                    *) w_die "File $file1 returned $status in verb dotnet20 which is unexpected, please file a bug with steps to reproduce$untranslated"
+                esac
         esac
 
-        w_set_winver 'default'
+        # TODO: remove once FIXME above is resolved (w_set_winver win2k)
+        w_set_winver default
 
         # We can't stop installing dotnet20 in win2k mode until Wine supports
         # reparse/junction points
@@ -7961,13 +8737,16 @@ load_dotnet20()
         # so for now just remove the bogus msvc*80.dll files it installs.
         # See also https://bugs.winehq.org/show_bug.cgi?id=16577
         # This affects Victoria 2 demo, see https://forum.paradoxplaza.com/forum/showthread.php?p=11523967
-        rm -f "$W_SYSTEM32_DLLS"/msvc?80.dll
+        w_fixme "Verb dotnet20 is using 'w_workaround_wine_bug 10467' which doesn't have selected wine versions"
+        if w_workaround_wine_bug 10467; then
+            w_warn "Affected by winebug 10467, removing file '$W_SYSTEM32_DLLS/msvc?80.dll'"
+            w_try rm -f "$W_SYSTEM32_DLLS/msvc?80.dll"
+        fi
     elif [ "$W_ARCH" = "win64" ]; then
         w_download https://download.microsoft.com/download/a/3/f/a3f1bf98-18f3-4036-9b68-8e6de530ce0a/NetFx64.exe 7ea86dca8eeaedcaa4a17370547ca2cea9e9b6774972b8e03d2cb1fb0e798669
 
-        # validates successfully in win7 mode wine-3.19, so not setting winversion
-        w_try_cd "$W_CACHE"/"$W_PACKAGE"
-        w_try "$WINE" NetFx64.exe ${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}
+        # validates successfully in win7 mode wine-3.19, so not setting winversion (?)
+        w_try "$WINE" "$W_CACHE/$W_PACKAGE/NetFx64.exe" "${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}"
     fi
 
     W_NGEN_CMD="w_try $WINE $W_DRIVE_C/windows/Microsoft.NET/Framework/v2.0.50727/ngen.exe executequeueditems"
@@ -7991,16 +8770,21 @@ w_metadata dotnet20sdk dlls \
 
 load_dotnet20sdk()
 {
+    w_fixme "Verb dotnet20sdk is using 'w_package_unsupported_win64' which doesn't have reference"
     w_package_unsupported_win64
 
     # https://www.microsoft.com/en-us/download/details.aspx?id=19988
     w_download https://download.microsoft.com/download/c/4/b/c4b15d7d-6f37-4d5a-b9c6-8f07e7d46635/setup.exe 1d7337bfbb2c65f43c82d188688ce152af403bcb67a2cc2a3cc68a580ecd8200
 
+    # Remove mono since we are overwriting it's libs with dotnet
     w_call remove_mono
 
+    w_fixme "Verb dotnet20sdk is using dotnet20 which lacks explanation"
     w_call dotnet20
 
+    w_fixme "Verb dotnet20sdk is using 'cd' which is unwante, check if we can remove it"
     w_try_cd "$W_CACHE/$W_PACKAGE"
+
     w_ahk_do "
         SetTitleMatchMode, 2
         run, setup.exe ${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}
@@ -8062,37 +8846,81 @@ w_metadata dotnet20sp1 dlls \
 
 load_dotnet20sp1()
 {
+    # Remove mono since we are overwriting it's libraries with dotnet
     w_call remove_mono
 
+    w_fixme "Verb dotnet20sp1 is using wineovverides for ngen.exe,regsvcs.exe and mscorsvw.exe which doesn't have explanation"
     WINEDLLOVERRIDES=ngen.exe,regsvcs.exe,mscorsvw.exe=b
     export WINEDLLOVERRIDES
 
     if [ "$W_ARCH" = "win32" ]; then
         # https://www.microsoft.com/en-us/download/details.aspx?id=16614
         w_download https://download.microsoft.com/download/0/8/c/08c19fa4-4c4f-4ffb-9d6c-150906578c9e/NetFx20SP1_x86.exe c36c3a1d074de32d53f371c665243196a7608652a2fc6be9520312d5ce560871
-        exe="NetFx20SP1_x86.exe"
 
-        w_warn "Setting windows version so installer works"
+        w_fixme "Verb dotnet20sp1 is using 'w_set_winver win2k' for 32-bit which doesn't have sufficient explanation"
+        w_fixme "Verb dotnet20sp1 is using 'w_set_winver win2k' for 32-bit which is unwanted, set per executable"
         w_set_winver win2k
+
+        # Execute
+        "$WINE" "$W_CACHE/$W_PACKAGE/NetFx20SP1_x86.exe" "${W_OPT_UNATTENDED:+/q}"
+        status=$?
+
+        case $status in
+            0)
+                case $LANG in
+                    en*) w_debug "Verb dotnet20sp1 returned true after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x86.exe'" ;;
+                    *) w_debug "Verb dotnet20sp1 returned true after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x86.exe'$untranslated"
+                esac
+            ;;
+            105)
+                case $LANG in
+                    en*) w_warn "Verb dotnet20sp1 returned $status after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x86.exe' - normal, user selected 'restart now' which is ignored by wine" ;;
+                    *) w_warn "Verb dotnet20sp1 returned $status after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x86.exe' - normal, user selected 'restart now' which is ignored by wine$untranslated"
+                esac
+            ;;
+            194)
+                case $LANG in
+                    en*) w_info "Verb dotnet20sp1 returned $status after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x86.exe' - normal, user selected 'restart later'" ;;
+                    *) w_info "Verb dotnet20sp1 returned $status after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x86.exe' - normal, user selected 'restart later'"
+                esac
+            ;;
+            *) w_die "Verb dotnet20sp1 returned $status after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x86.exe' - Which is unexpected, please file a bug with steps to reproduce"
+        esac
     elif [ "$W_ARCH" = "win64" ]; then
         # https://www.microsoft.com/en-us/download/details.aspx?id=6041
         w_download https://download.microsoft.com/download/9/8/6/98610406-c2b7-45a4-bdc3-9db1b1c5f7e2/NetFx20SP1_x64.exe 1731e53de5f48baae0963677257660df1329549e81c48b4d7db7f7f3f2329aab
-        exe="NetFx20SP1_x64.exe"
 
-        w_warn "Setting windows version so installer works"
+        w_fixme "Verb dotnet20sp1 is using 'w_set_winver winxp' for 64-bit which is unwanted, set per executable"
+        w_fixme "Verb dotnet20sp1 is using 'w_set_winver winxp' for 64-bit which doesn't have sufficient explanation"
         w_set_winver winxp
+
+        # Execute
+        "$WINE" "$W_CACHE/$W_PACKAGE/NetFx20SP1_x86.exe" "${W_OPT_UNATTENDED:+/q}"
+        status=$?
+
+        w_fixme "Verb dotnet20sp1 is using duplicate function for translate"
+        case $status in
+            0)
+                case $LANG in
+                    en*) w_debug "Verb dotnet20sp1 returned true after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x64.exe'" ;;
+                    *) w_debug "Verb dotnet20sp1 returned true after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x64.exe'$untranslated"
+                esac
+            ;;
+            105)
+                case $LANG in
+                    en*) w_warn "Verb dotnet20sp1 returned $status after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x64.exe' - normal, user selected 'restart now' which is ignored by wine" ;;
+                    *) w_warn "Verb dotnet20sp1 returned $status after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x64.exe' - normal, user selected 'restart now' which is ignored by wine$untranslated"
+                esac
+            ;;
+            194)
+                case $LANG in
+                    en*) w_info "Verb dotnet20sp1 returned $status after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x64.exe' - normal, user selected 'restart later'" ;;
+                    *) w_info "Verb dotnet20sp1 returned $status after executing '$W_CACHE/$W_PACKAGE/NetFx20SP1_x64.exe' - normal, user selected 'restart later'"
+                esac
+            ;;
+            *)
+        esac
     fi
-
-    w_try_cd "$W_CACHE/$W_PACKAGE"
-    "$WINE" "$exe" ${W_OPT_UNATTENDED:+/q}
-    status=$?
-
-    case $status in
-        0) ;;
-        105) echo "exit status $status - normal, user selected 'restart now'" ;;
-        194) echo "exit status $status - normal, user selected 'restart later'" ;;
-        *) w_die "exit status $status - $W_PACKAGE installation failed" ;;
-    esac
 
     if [ "$W_ARCH" = "win32" ]; then
         # We can't stop installing dotnet20sp1 in win2k mode until Wine supports
@@ -8101,16 +8929,23 @@ load_dotnet20sp1()
         # so for now just remove the bogus msvc*80.dll files it installs.
         # See also https://bugs.winehq.org/show_bug.cgi?id=16577
         # This affects Victoria 2 demo, see https://forum.paradoxplaza.com/forum/showthread.php?p=11523967
-        rm -f "$W_SYSTEM32_DLLS"/msvc?80.dll
-
+        if w_workaround_wine_bug 16577; then
+            w_warn "Verb dotnet20sp1 is affected by winebug 16577, removing file msvc?80.dll as workaround"
+            rm -f "$W_SYSTEM32_DLLS/msvc?80.dll"
+        elif ! w_workaround_wine_bug 16577; then
+            w_debug "Verb dotnet20sp1 is not affected by winebug 16577, not removing msvc?80.dll"
+        fi
     fi
 
+    # TODO: remove once fixme above is resolved
     w_set_winver 'default'
 
+    w_fixme "Verb dotnet20sp1 is using variable 'W_NGEN_CMD' which doesn't have explanation"
     W_NGEN_CMD="w_try $WINE $W_DRIVE_C/windows/Microsoft.NET/Framework/v2.0.50727/ngen.exe executequeueditems"
 
-    # Installs the same file(name)s as dotnet35sp1, let users install dotnet35sp1 after dotnet20sp1
-    w_try touch "${W_WINDIR_UNIX}/dotnet20sp1.installed.workaround"
+    # Installs the same file(name)s as dotnet35sp1, let users install dotnet35sp1 after dotnet20sp1 (?)
+    w_fixme "Verb dotnet20sp1 lacks reference for 'w_try touch "$W_WINDIR_UNIX/dotnet20sp1.installed.workaround"'"
+    w_try touch "$W_WINDIR_UNIX/dotnet20sp1.installed.workaround"
 }
 
 verify_dotnet20sp1()
@@ -8213,13 +9048,15 @@ load_dotnet30()
         esac
     fi
 
+    # Compatibility for Windows
     case "$W_PLATFORM" in
-        windows_cmd)
+        windows_cygwin)
             osver=$(cmd /c ver)
             case "$osver" in
                 *Version?6*) w_die "Vista and up bundle .NET 3.0, so you can't install it like this" ;;
             esac
             ;;
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in load_dotnet30()"
     esac
 
     # AF's workaround to avoid long pause
@@ -8332,9 +9169,11 @@ load_dotnet35()
         w_package_unsupported_win64
     fi
 
+    # Platform compatibility
     case "$W_PLATFORM" in
-        windows_cmd) ;;
-        *) w_warn "dotnet35 does not yet fully work or install on wine.  Caveat emptor." ;;
+        windows_cygwin|windows_windows) ;;
+        nix_linux|nix_freebsd|nix_darwin|nix_redox) w_warn "dotnet35 does not yet fully work or install on wine.  Caveat emptor." ;;
+        *) w_die "Unknown platform '$W_PLATFORM' parsed in load_dotnet35()"
     esac
 
     w_verify_cabextract_available
@@ -8387,8 +9226,9 @@ load_dotnet35sp1()
     fi
 
     case "$W_PLATFORM" in
-        windows_cmd) ;;
-        *) w_warn "dotnet35sp1 does not yet fully work or install on wine.  Caveat emptor." ;;
+        windows_cygwin|windows_windows) ;;
+        nix_linux|nix_freebsd|nix_darwin|nix_redox) w_warn "dotnet35sp1 does not yet fully work or install on wine.  Caveat emptor." ;;
+        *) w_die "Unknown platform parsed in load_dotnet35sp1()"
     esac
 
     w_verify_cabextract_available
@@ -8436,8 +9276,9 @@ load_dotnet40()
     w_package_warn_win64
 
     case "$W_PLATFORM" in
-        windows_cmd) ;;
-        *) w_warn "dotnet40 does not yet fully work or install on wine.  Caveat emptor." ;;
+        windows_cygwin|windows_windows) ;;
+        nix_linux|nix_freebsd|nix_darwin|nix_redox) w_warn "dotnet40 does not yet fully work or install on wine.  Caveat emptor." ;;
+        *) w_die "Unknown platform '$W_PLATFORM' used in load_dotnet40()"
     esac
 
     if [ "$W_ARCH" = "win64" ]; then
@@ -9337,6 +10178,38 @@ load_galliumnine03()
     helper_galliumnine "$file1"
 }
 
+w_metadata galliumnine04 dlls \
+    title="Gallium Nine Standalone (v0.4)" \
+    publisher="Gallium Nine Team" \
+    year="2019" \
+    media="download" \
+    file1="gallium-nine-standalone-v0.4.tar.gz" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d9-nine.dll" \
+    installed_file2="$W_SYSTEM32_DLLS_WIN/ninewinecfg.exe" \
+    homepage="https://github.com/iXit/wine-nine-standalone"
+
+load_galliumnine04()
+{
+    w_download "https://github.com/iXit/wine-nine-standalone/releases/download/v0.4/gallium-nine-standalone-v0.4.tar.gz" 4423c32d46419830c8e68fea86d28e740f17f182c365250c379b5493176e19ab
+    helper_galliumnine "$file1"
+}
+
+w_metadata galliumnine05 dlls \
+    title="Gallium Nine Standalone (v0.5)" \
+    publisher="Gallium Nine Team" \
+    year="2019" \
+    media="download" \
+    file1="gallium-nine-standalone-v0.5.tar.gz" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/d3d9-nine.dll" \
+    installed_file2="$W_SYSTEM32_DLLS_WIN/ninewinecfg.exe" \
+    homepage="https://github.com/iXit/wine-nine-standalone"
+
+load_galliumnine05()
+{
+    w_download "https://github.com/iXit/wine-nine-standalone/releases/download/v0.5/gallium-nine-standalone-v0.5.tar.gz" c46e06b13a3ba0adee75b27a8b54e9d772f83ed29dee5e203364460771fb1bcd
+    helper_galliumnine "$file1"
+}
+
 w_metadata galliumnine dlls \
     title="Gallium Nine Standalone (latest)" \
     publisher="Gallium Nine Team" \
@@ -9535,7 +10408,7 @@ w_metadata dirac dlls \
 
 load_dirac()
 {
-    w_download $WINETRICKS_SOURCEFORGE/dirac/DiracDirectShowFilter-1.0.2.exe 7257de4be940405637bb5d11c1179f7db86f165f21fc0ba24f42a9ecbc55fe20
+    w_download https://downloads.sourceforge.net/dirac/DiracDirectShowFilter-1.0.2.exe 7257de4be940405637bb5d11c1179f7db86f165f21fc0ba24f42a9ecbc55fe20
 
     # Avoid mfc90 not found error.  (DiracSplitter-libschroedinger.ax needs mfc90 to register itself, I think.)
     w_call vcrun2008
@@ -9580,7 +10453,7 @@ w_metadata ffdshow dlls \
 
 load_ffdshow()
 {
-    w_download $WINETRICKS_SOURCEFORGE/ffdshow-tryout/ffdshow_beta7_rev3154_20091209.exe 86fb22e9a79a1c83340a99fd5722974a4d03948109d404a383c4334fab8f8860
+    w_download https://downloads.sourceforge.net/ffdshow-tryout/ffdshow_beta7_rev3154_20091209.exe 86fb22e9a79a1c83340a99fd5722974a4d03948109d404a383c4334fab8f8860
     w_try_cd "$W_CACHE/$W_PACKAGE"
     w_try "$WINE" ffdshow_beta7_rev3154_20091209.exe $W_UNATTENDED_SLASH_SILENT
 }
@@ -10072,13 +10945,13 @@ w_metadata mfc40 dlls \
 
 load_mfc40()
 {
-    w_warn "mfc40 no longer installs msvcrt40.dll, only mfc40.dll/mfc40u.dll. Please file a bug if you have an application that needs native msvcrt40.dll."
-
     helper_win7sp1 x86_microsoft-windows-mfc40_31bf3856ad364e35_6.1.7601.17514_none_5c06580240091047/mfc40.dll
     w_try cp "$W_TMP/x86_microsoft-windows-mfc40_31bf3856ad364e35_6.1.7601.17514_none_5c06580240091047/mfc40.dll" "$W_SYSTEM32_DLLS/mfc40.dll"
 
     helper_win7sp1 x86_microsoft-windows-mfc40u_31bf3856ad364e35_6.1.7601.17514_none_f51a7bf0b3d25294/mfc40u.dll
     w_try cp "$W_TMP/x86_microsoft-windows-mfc40u_31bf3856ad364e35_6.1.7601.17514_none_f51a7bf0b3d25294/mfc40u.dll" "$W_SYSTEM32_DLLS/mfc40u.dll"
+
+    w_call msvcrt40
 }
 
 #----------------------------------------------------------------
@@ -10312,6 +11185,24 @@ load_msftedit()
     fi
 
     w_override_dlls native,builtin msftedit
+}
+
+#----------------------------------------------------------------
+
+w_metadata msvcrt40 dlls \
+    title="fixme" \
+    publisher="Microsoft" \
+    year="2011" \
+    media="download" \
+    file1="../winxpsp3/WindowsXP-KB936929-SP3-x86-ENU.exe" \
+    installed_file1="$W_SYSTEM32_DLLS_WIN/msvcrt40.dll"
+
+load_msvcrt40()
+{
+    helper_winxpsp3 i386/msvcrt40.dl_
+    w_try_cabextract --directory="$W_SYSTEM32_DLLS" "$W_TMP"/i386/msvcrt40.dl_
+
+    w_override_dlls native,builtin msvcrt40
 }
 
 #----------------------------------------------------------------
@@ -10601,7 +11492,7 @@ w_metadata python26 dlls \
 load_python26()
 {
     w_download https://www.python.org/ftp/python/2.6.2/python-2.6.2.msi c2276b398864b822c25a7c240cb12ddb178962afd2e12d602f1a961e31ad52ff
-    w_download $WINETRICKS_SOURCEFORGE/project/pywin32/pywin32/Build%20214/pywin32-214.win32-py2.6.exe dc311bbdc5868e3dd139dfc46136221b7f55c5613a98a5a48fa725a6c681cd40
+    w_download https://downloads.sourceforge.net/project/pywin32/pywin32/Build%20214/pywin32-214.win32-py2.6.exe dc311bbdc5868e3dd139dfc46136221b7f55c5613a98a5a48fa725a6c681cd40
 
     w_try_cd "$W_CACHE/$W_PACKAGE"
     w_try "$WINE" msiexec /i python-2.6.2.msi ALLUSERS=1 $W_UNATTENDED_SLASH_Q
@@ -11648,50 +12539,101 @@ load_vcrun2015()
     # 2015/10/12: fdd1e1f0dcae2d0aa0720895eff33b927d13076e64464bb7c7e5843b7667cd14
     w_download https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x86.exe fdd1e1f0dcae2d0aa0720895eff33b927d13076e64464bb7c7e5843b7667cd14
 
-    if w_workaround_wine_bug 37781; then
-        w_warn "This may fail in non-XP mode, see https://bugs.winehq.org/show_bug.cgi?id=37781"
+    # This was resolved on wine >1.7.33 (https://bugs.winehq.org/show_bug.cgi?id=37781)
+    if w_workaround_wine_bug 37781 '' ,1.7.33; then
+        w_warn "Affected by winebug 37781, this may fail in non-XP mode om wine <1.7.33"
+        w_set_app_winver vc_redist.x86.exe winxp
+
+        # Workaround for 64-bit
+        [ "$W_ARCH" = win64 ] && w_set_app_winver vc_redist.x64.exe winxp
+    elif ! w_workaround_wine_bug 37781 '' ,1.7.33; then
+        w_debug "Verb vcrun2015 is not affected by winebug 37781 on this system"
     fi
 
-    w_override_dlls native,builtin api-ms-win-crt-conio-l1-1-0 api-ms-win-crt-heap-l1-1-0 api-ms-win-crt-locale-l1-1-0 api-ms-win-crt-math-l1-1-0 api-ms-win-crt-runtime-l1-1-0 api-ms-win-crt-stdio-l1-1-0 api-ms-win-crt-time-l1-1-0 atl140 concrt140 msvcp140 msvcr140 ucrtbase vcomp140 vcruntime140
+    # Overrides for exported libs
+    w_override_dlls native,builtin \
+        api-ms-win-crt-private-l1-1-0 \
+        api-ms-win-crt-conio-l1-1-0 \
+        api-ms-win-crt-heap-l1-1-0 \
+        api-ms-win-crt-locale-l1-1-0 \
+        api-ms-win-crt-math-l1-1-0 \
+        api-ms-win-crt-runtime-l1-1-0 \
+        api-ms-win-crt-stdio-l1-1-0 \
+        api-ms-win-crt-time-l1-1-0 \
+        atl140 \
+        concrt140 \
+        msvcp140 \
+        msvcr140 \
+        ucrtbase \
+        vcomp140 \
+        vcruntime140
 
-    w_set_winver winxp
+    # Install 32-bit libs
+    # 15112019 - vcrun* fails to install on wine >4.12 (https://bugs.winehq.org/show_bug.cgi?id=47565)
+    # Relevant winetricks bug - https://github.com/Winetricks/winetricks/issues/1407#issuecomment-554487586
+    if w_workaround_wine_bug 47565 '' 4.12,; then
+        w_try_cabextract --directory="$W_TMP" "$W_CACHE/$W_PACKAGE/vc_redist.x86.exe"
+        w_try_cabextract --directory="$W_TMP" "$W_TMP/a10"
+        w_try_cabextract --directory="$W_TMP" "$W_TMP/a11"
+        w_try cp "$W_TMP/concrt140.dll" "$W_SYSTEM32_DLLS/concrt140.dll"
+        w_try cp "$W_TMP/mfc140.dll" "$W_SYSTEM32_DLLS/mfc140.dll"
+        w_try cp "$W_TMP/mfc140u.dll" "$W_SYSTEM32_DLLS/mfc140u.dll"
+        w_try cp "$W_TMP/mfcm140.dll" "$W_SYSTEM32_DLLS/mfcm140.dll"
+        w_try cp "$W_TMP/mfcm140u.dll" "$W_SYSTEM32_DLLS/mfcm140u.dll"
+        w_try cp "$W_TMP/msvcp140.dll" "$W_SYSTEM32_DLLS/msvcp140.dll"
+        w_try cp "$W_TMP/vcamp140.dll" "$W_SYSTEM32_DLLS/vcamp140.dll"
+        w_try cp "$W_TMP/vccorlib140.dll" "$W_SYSTEM32_DLLS/vccorlib140.dll"
+        w_try cp "$W_TMP/vcomp140.dll" "$W_SYSTEM32_DLLS/vcomp140.dll"
+        w_try cp "$W_TMP/vcruntime140.dll" "$W_SYSTEM32_DLLS/vcruntime140.dll"
 
-    w_try_cd "$W_CACHE"/"$W_PACKAGE"
-    w_try "$WINE" vc_redist.x86.exe $W_UNATTENDED_SLASH_Q
+        w_try cp "$W_TMP/api_ms_win_crt_conio_l1_1_0.dll" "$W_SYSTEM32_DLLS/api-ms-win-crt-conio-l1-1-0.dll"
+        w_try cp "$W_TMP/api_ms_win_crt_heap_l1_1_0.dll" "$W_SYSTEM32_DLLS/api-ms-win-crt-heap-l1-1-0.dll"
+        w_try cp "$W_TMP/api_ms_win_crt_locale_l1_1_0.dll" "$W_SYSTEM32_DLLS/api-ms-win-crt-locale-l1-1-0.dll"
+        w_try cp "$W_TMP/api_ms_win_crt_math_l1_1_0.dll" "$W_SYSTEM32_DLLS/api-ms-win-crt-math-l1-1-0.dll"
+        w_try cp "$W_TMP/api_ms_win_crt_runtime_l1_1_0.dll" "$W_SYSTEM32_DLLS/api-ms-win-crt-runtime-l1-1-0.dll"
+        w_try cp "$W_TMP/api_ms_win_crt_stdio_l1_1_0.dll" "$W_SYSTEM32_DLLS/api-ms-win-crt-stdio-l1-1-0.dll"
+        w_try cp "$W_TMP/ucrtbase.dll" "$W_SYSTEM32_DLLS/ucrtbase.dll"
+    elif ! w_workaround_wine_bug 47565 '' 4.12,; then
+        w_try "$WINE" "$W_CACHE/$W_PACKAGE/vc_redist.x64.exe" "$W_UNATTENDED_SLASH_Q"
+    else
+        w_die "Unexpected result in vcrun2015 in winebug 47565 logic"
+    fi
 
-    case "$W_ARCH" in
-        win64)
-            # Also install the 64-bit version
-            # 2015/10/12: 5eea714e1f22f1875c1cb7b1738b0c0b1f02aec5ecb95f0fdb1c5171c6cd93a3
-            w_download https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x64.exe 5eea714e1f22f1875c1cb7b1738b0c0b1f02aec5ecb95f0fdb1c5171c6cd93a3
-            if w_workaround_wine_bug 30713 "Manually extracting the 64-bit dlls", 3.8; then
-                rm -f "$W_TMP"/*  # Avoid permission error
-                w_try_cabextract --directory="$W_TMP" vc_redist.x64.exe
-                w_try_cabextract --directory="$W_TMP" "$W_TMP/a10"
-                w_try_cabextract --directory="$W_TMP" "$W_TMP/a11"
-                cp "$W_TMP"/concrt140.dll "$W_SYSTEM64_DLLS"/concrt140.dll
-                cp "$W_TMP"/mfc140.dll "$W_SYSTEM64_DLLS"/mfc140.dll
-                cp "$W_TMP"/mfc140u.dll "$W_SYSTEM64_DLLS"/mfc140u.dll
-                cp "$W_TMP"/mfcm140.dll "$W_SYSTEM64_DLLS"/mfcm140.dll
-                cp "$W_TMP"/mfcm140u.dll "$W_SYSTEM64_DLLS"/mfcm140u.dll
-                cp "$W_TMP"/msvcp140.dll "$W_SYSTEM64_DLLS"/msvcp140.dll
-                cp "$W_TMP"/vcamp140.dll "$W_SYSTEM64_DLLS"/vcamp140.dll
-                cp "$W_TMP"/vccorlib140.dll "$W_SYSTEM64_DLLS"/vccorlib140.dll
-                cp "$W_TMP"/vcomp140.dll "$W_SYSTEM64_DLLS"/vcomp140.dll
-                cp "$W_TMP"/vcruntime140.dll "$W_SYSTEM64_DLLS"/vcruntime140.dll
+    # Install 64-bit libs
+    if [ "$W_ARCH" = win64 ]; then
+      # Also install the 64-bit version
+      # 2015/10/12: 5eea714e1f22f1875c1cb7b1738b0c0b1f02aec5ecb95f0fdb1c5171c6cd93a3
+      w_download https://download.microsoft.com/download/9/3/F/93FCF1E7-E6A4-478B-96E7-D4B285925B00/vc_redist.x64.exe 5eea714e1f22f1875c1cb7b1738b0c0b1f02aec5ecb95f0fdb1c5171c6cd93a3
 
-                cp "$W_TMP"/api_ms_win_crt_conio_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-conio-l1-1-0.dll
-                cp "$W_TMP"/api_ms_win_crt_heap_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-heap-l1-1-0.dll
-                cp "$W_TMP"/api_ms_win_crt_locale_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-locale-l1-1-0.dll
-                cp "$W_TMP"/api_ms_win_crt_math_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-math-l1-1-0.dll
-                cp "$W_TMP"/api_ms_win_crt_runtime_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-runtime-l1-1-0.dll
-                cp "$W_TMP"/api_ms_win_crt_stdio_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-stdio-l1-1-0.dll
-                cp "$W_TMP"/ucrtbase.dll "$W_SYSTEM64_DLLS"/ucrtbase.dll
-            else
-                w_try "$WINE" vc_redist.x64.exe $W_UNATTENDED_SLASH_Q
-            fi
-            ;;
-    esac
+      if w_workaround_wine_bug 30713 "Manually extracting the 64-bit dlls", 3.8; then
+          rm -f "$W_TMP"/*  # Avoid permission error
+          w_try_cabextract --directory="$W_TMP" "$W_CACHE/$W_PACKAGE/vc_redist.x64.exe"
+          w_try_cabextract --directory="$W_TMP" "$W_TMP/a10"
+          w_try_cabextract --directory="$W_TMP" "$W_TMP/a11"
+          w_try cp "$W_TMP/concrt140.dll" "$W_SYSTEM64_DLLS/concrt140.dll"
+          w_try cp "$W_TMP/mfc140.dll" "$W_SYSTEM64_DLLS/mfc140.dll"
+          w_try cp "$W_TMP/mfc140u.dll" "$W_SYSTEM64_DLLS/mfc140u.dll"
+          w_try cp "$W_TMP/mfcm140.dll" "$W_SYSTEM64_DLLS/mfcm140.dll"
+          w_try cp "$W_TMP/mfcm140u.dll" "$W_SYSTEM64_DLLS/mfcm140u.dll"
+          w_try cp "$W_TMP/msvcp140.dll" "$W_SYSTEM64_DLLS/msvcp140.dll"
+          w_try cp "$W_TMP/vcamp140.dll" "$W_SYSTEM64_DLLS/vcamp140.dll"
+          w_try cp "$W_TMP/vccorlib140.dll" "$W_SYSTEM64_DLLS/vccorlib140.dll"
+          w_try cp "$W_TMP/vcomp140.dll" "$W_SYSTEM64_DLLS/vcomp140.dll"
+          w_try cp "$W_TMP/vcruntime140.dll" "$W_SYSTEM64_DLLS/vcruntime140.dll"
+
+          w_try cp "$W_TMP/api_ms_win_crt_conio_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-conio-l1-1-0.dll"
+          w_try cp "$W_TMP/api_ms_win_crt_heap_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-heap-l1-1-0.dll"
+          w_try cp "$W_TMP/api_ms_win_crt_locale_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-locale-l1-1-0.dll"
+          w_try cp "$W_TMP/api_ms_win_crt_math_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-math-l1-1-0.dll"
+          w_try cp "$W_TMP/api_ms_win_crt_runtime_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-runtime-l1-1-0.dll"
+          w_try cp "$W_TMP/api_ms_win_crt_stdio_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-stdio-l1-1-0.dll"
+          w_try cp "$W_TMP/ucrtbase.dll" "$W_SYSTEM64_DLLS/ucrtbase.dll"
+      elif ! w_workaround_wine_bug 30713 "Manually extracting the 64-bit dlls", 3.8; then
+          w_try "$WINE" "$W_CACHE/$W_PACKAGE/vc_redist.x64.exe" "$W_UNATTENDED_SLASH_Q"
+      else
+          w_die "Unexpected result in vcrun2015 in winebug 30713 logic"
+      fi
+    fi
 }
 
 #----------------------------------------------------------------
@@ -11712,16 +12654,19 @@ load_vcrun2017()
     # 2019/08/14: 54ad46ae80984aa48cae6361213692c96b3639e322730d28c7fb93b183c761da
     w_download https://aka.ms/vs/15/release/vc_redist.x86.exe 54ad46ae80984aa48cae6361213692c96b3639e322730d28c7fb93b183c761da
 
-    if w_workaround_wine_bug 37781; then
-        w_warn "This may fail in non-XP mode, see https://bugs.winehq.org/show_bug.cgi?id=37781"
+    # wine =<1.1.43 is affected by this bug (https://bugs.winehq.org/show_bug.cgi?id=10467#c94)
+    if w_workaround_wine_bug 37781 '' ,1.1.43; then
+        w_warn "Affected by winebug 37781 which requires winxp environment to install vcrun2017"
+        w_set_app_winver vc_redist.x86.exe winxp
+        w_set_app_winver vc_redist.x64.exe winxp
+    elif w_workaround_wine_bug 37781 '' ,1.1.43; then
+        w_debug "Not affected by winebug 37781 which requries winxp environment to run vcrun2017"
     fi
 
-    w_override_dlls native,builtin api-ms-win-crt-conio-l1-1-0 api-ms-win-crt-heap-l1-1-0 api-ms-win-crt-locale-l1-1-0 api-ms-win-crt-math-l1-1-0 api-ms-win-crt-runtime-l1-1-0 api-ms-win-crt-stdio-l1-1-0 api-ms-win-crt-time-l1-1-0 atl140 concrt140 msvcp140 msvcr140 ucrtbase vcomp140 vcruntime140
+    # Override for used vcrun libraries
+    w_override_dlls native,builtin api-ms-win-crt-private-l1-1-0 api-ms-win-crt-conio-l1-1-0 api-ms-win-crt-heap-l1-1-0 api-ms-win-crt-locale-l1-1-0 api-ms-win-crt-math-l1-1-0 api-ms-win-crt-runtime-l1-1-0 api-ms-win-crt-stdio-l1-1-0 api-ms-win-crt-time-l1-1-0 atl140 concrt140 msvcp140 msvcr140 ucrtbase vcomp140 vcruntime140
 
-    w_set_winver winxp
-
-    w_try_cd "$W_CACHE/$W_PACKAGE"
-    w_try "$WINE" vc_redist.x86.exe $W_UNATTENDED_SLASH_Q
+    w_try "$WINE" "$W_CACHE/$W_PACKAGE/vc_redist.x86.exe" $W_UNATTENDED_SLASH_Q
 
     case "$W_ARCH" in
         win64)
@@ -11732,32 +12677,31 @@ load_vcrun2017()
             # 2019/08/14: 5b0cbb977f2f5253b1ebe5c9d30edbda35dbd68fb70de7af5faac6423db575b5
             w_download https://aka.ms/vs/15/release/vc_redist.x64.exe 5b0cbb977f2f5253b1ebe5c9d30edbda35dbd68fb70de7af5faac6423db575b5
             if w_workaround_wine_bug 30713 "Manually extracting the 64-bit dlls" ,3.8; then
-                rm -f "$W_TMP"/*  # Avoid permission error
-                w_try_cabextract --directory="$W_TMP" vc_redist.x64.exe
+                rm -f "$W_TMP/*"  # Avoid permission error
+                w_try_cabextract --directory="$W_TMP" "$W_CACHE/$W_PACKAGE/vc_redist.x64.exe"
                 w_try_cabextract --directory="$W_TMP" "$W_TMP/a10"
                 w_try_cabextract --directory="$W_TMP" "$W_TMP/a11"
-                cp "$W_TMP"/concrt140.dll "$W_SYSTEM64_DLLS"/concrt140.dll
-                cp "$W_TMP"/mfc140.dll "$W_SYSTEM64_DLLS"/mfc140.dll
-                cp "$W_TMP"/mfc140u.dll "$W_SYSTEM64_DLLS"/mfc140u.dll
-                cp "$W_TMP"/mfcm140.dll "$W_SYSTEM64_DLLS"/mfcm140.dll
-                cp "$W_TMP"/mfcm140u.dll "$W_SYSTEM64_DLLS"/mfcm140u.dll
-                cp "$W_TMP"/msvcp140.dll "$W_SYSTEM64_DLLS"/msvcp140.dll
-                cp "$W_TMP"/vcamp140.dll "$W_SYSTEM64_DLLS"/vcamp140.dll
-                cp "$W_TMP"/vccorlib140.dll "$W_SYSTEM64_DLLS"/vccorlib140.dll
-                cp "$W_TMP"/vcomp140.dll "$W_SYSTEM64_DLLS"/vcomp140.dll
-                cp "$W_TMP"/vcruntime140.dll "$W_SYSTEM64_DLLS"/vcruntime140.dll
+                w_try cp "$W_TMP/concrt140.dll" "$W_SYSTEM64_DLLS/concrt140.dll"
+                w_try cp "$W_TMP/mfc140.dll" "$W_SYSTEM64_DLLS/mfc140.dll"
+                w_try cp "$W_TMP/mfc140u.dll" "$W_SYSTEM64_DLLS/mfc140u.dll"
+                w_try cp "$W_TMP/mfcm140.dll" "$W_SYSTEM64_DLLS/mfcm140.dll"
+                w_try cp "$W_TMP/mfcm140u.dll" "$W_SYSTEM64_DLLS/mfcm140u.dll"
+                w_try cp "$W_TMP/msvcp140.dll" "$W_SYSTEM64_DLLS/msvcp140.dll"
+                w_try cp "$W_TMP/vcamp140.dll" "$W_SYSTEM64_DLLS/vcamp140.dll"
+                w_try cp "$W_TMP/vccorlib140.dll" "$W_SYSTEM64_DLLS/vccorlib140.dll"
+                w_try cp "$W_TMP/vcomp140.dll" "$W_SYSTEM64_DLLS/vcomp140.dll"
+                w_try cp "$W_TMP/vcruntime140.dll" "$W_SYSTEM64_DLLS/vcruntime140.dll"
 
-                cp "$W_TMP"/api_ms_win_crt_conio_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-conio-l1-1-0.dll
-                cp "$W_TMP"/api_ms_win_crt_heap_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-heap-l1-1-0.dll
-                cp "$W_TMP"/api_ms_win_crt_locale_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-locale-l1-1-0.dll
-                cp "$W_TMP"/api_ms_win_crt_math_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-math-l1-1-0.dll
-                cp "$W_TMP"/api_ms_win_crt_runtime_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-runtime-l1-1-0.dll
-                cp "$W_TMP"/api_ms_win_crt_stdio_l1_1_0.dll "$W_SYSTEM64_DLLS"/api-ms-win-crt-stdio-l1-1-0.dll
-                cp "$W_TMP"/ucrtbase.dll "$W_SYSTEM64_DLLS"/ucrtbase.dll
-            else
-                w_try "$WINE" vc_redist.x64.exe $W_UNATTENDED_SLASH_Q
+                w_try cp "$W_TMP/api_ms_win_crt_conio_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-conio-l1-1-0.dll"
+                w_try cp "$W_TMP/api_ms_win_crt_heap_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-heap-l1-1-0.dll"
+                w_try cp "$W_TMP/api_ms_win_crt_locale_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-locale-l1-1-0.dll"
+                w_try cp "$W_TMP/api_ms_win_crt_math_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-math-l1-1-0.dll"
+                w_try cp "$W_TMP/api_ms_win_crt_runtime_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-runtime-l1-1-0.dll"
+                w_try cp "$W_TMP/api_ms_win_crt_stdio_l1_1_0.dll" "$W_SYSTEM64_DLLS/api-ms-win-crt-stdio-l1-1-0.dll"
+                w_try cp "$W_TMP/ucrtbase.dll" "$W_SYSTEM64_DLLS/ucrtbase.dll"
+            elif ! w_workaround_wine_bug 30713 "Manually extracting the 64-bit dlls" ,3.8; then
+                w_try "$WINE" "$W_CACHE/$W_PACKAGE/vc_redist.x64.exe" $W_UNATTENDED_SLASH_Q
             fi
-            ;;
     esac
 }
 
@@ -13034,7 +13978,7 @@ w_metadata opensymbol fonts \
     publisher="OpenOffice.org" \
     year="2017" \
     media="download" \
-    file1="fonts-opensymbol_102.10+LibO6.1.5-3+deb10u3_all.deb" \
+    file1="fonts-opensymbol_102.10+LibO6.1.5-3+deb10u4_all.deb" \
     installed_file1="$W_FONTSDIR_WIN/opens___.ttf"
 
 load_opensymbol()
@@ -13042,8 +13986,7 @@ load_opensymbol()
     # The OpenSymbol fonts are a replacement for the Windows Wingdings font from OpenOffice.org.
     # Need to w_download Debian since I can't find a standalone download from OpenOffice
     # Note: The source download package on debian is for _all_ of OpenOffice, which is 266 MB.
-    w_download "https://deb.debian.org/debian-security/pool/updates/main/libr/libreoffice/fonts-opensymbol_102.10+LibO6.1.5-3+deb10u3_all.deb" fb302a58166bf3fa29efee234d6659361213e5f36a7abfd948fa7288c5f7fb30
-
+    w_download "https://cdn-aws.deb.debian.org/debian-security/pool/updates/main/libr/libreoffice/fonts-opensymbol_102.10+LibO6.1.5-3+deb10u4_all.deb" 1b2ab1e8eeb9a3a4a07e4a1c9bf539bb721734bf8b9881f4d0b8e71e822cecde
     w_try_cd "$W_TMP"
     w_try_ar "$W_CACHE/$W_PACKAGE/$file1" data.tar.xz
     w_try tar -Jxf "$W_TMP/data.tar.xz" ./usr/share/fonts/truetype/openoffice/opens___.ttf
@@ -13758,7 +14701,7 @@ load_ie6()
 {
     w_package_unsupported_win64
 
-    w_download http://cdn.browserarchive.org/ie/win32/6.0/ie60.exe e34e0557d939e7e83185f5354403df99c92a3f3ff80f5ee0c75f6843eaa6efb2
+    w_download https://web.archive.org/web/20150411022055if_/http://download.oldapps.com/Internet_Explorer/ie60.exe e34e0557d939e7e83185f5354403df99c92a3f3ff80f5ee0c75f6843eaa6efb2
 
     w_try_cd "$W_TMP"
     "$WINE" "$W_CACHE/$W_PACKAGE/$file1"
@@ -14135,7 +15078,7 @@ w_metadata mingw apps \
 
 load_mingw()
 {
-    w_download "$WINETRICKS_SOURCEFORGE/mingw/files/mingw-get-setup.exe" aab27bd5547d35dc159288f3b5b8760f21b0cfec86e8f0032b49dd0410f232bc
+    w_download "https://downloads.sourceforge.net/mingw/files/mingw-get-setup.exe" aab27bd5547d35dc159288f3b5b8760f21b0cfec86e8f0032b49dd0410f232bc
 
     if test "$W_OPT_UNATTENDED"; then
         w_info "FYI: Quiet mode will install these mingw packages: 'gcc msys-base'"
@@ -14204,7 +15147,7 @@ w_metadata mpc apps \
 
 load_mpc()
 {
-    w_download $WINETRICKS_SOURCEFORGE/project/mpc-hc/MPC%20HomeCinema%20-%20Win32/MPC-HC_v1.7.5_x86/MPC-HC.1.7.5.x86.exe 1d690da5b330f723aea4a294d478828395d321b59fc680f2b971e8b16b8bd33d
+    w_download https://downloads.sourceforge.net/project/mpc-hc/MPC%20HomeCinema%20-%20Win32/MPC-HC_v1.7.5_x86/MPC-HC.1.7.5.x86.exe 1d690da5b330f723aea4a294d478828395d321b59fc680f2b971e8b16b8bd33d
     w_try_cd "$W_CACHE/$W_PACKAGE"
     w_try "$WINE" MPC-HC.1.7.5.x86.exe ${W_OPT_UNATTENDED:+ /VERYSILENT}
 }
@@ -15005,19 +15948,8 @@ load_steam()
     # 2016/10/28: 029f918a29b2b311711788e8a477c8de529c11d7dba3caf99cbbde5a983efdad
     # 2018/06/01: 3bc6942fe09f10ed3447bccdcf4a70ed369366fef6b2c7f43b541f1a3c5d1c51
     w_download http://media.steampowered.com/client/installer/SteamSetup.exe 3bc6942fe09f10ed3447bccdcf4a70ed369366fef6b2c7f43b541f1a3c5d1c51
-    w_try_cd "$W_CACHE/$W_PACKAGE"
 
-    # Should be fixed in newer steam versions, since 2012. Commenting out for a while before removing in case users need to revert locally
-    #
-    # Install corefonts first, so if the user doesn't have cabextract/Wine with cab support, we abort before installing Steam.
-    # FIXME: support using Wine's cab support
-    #if ! test -f "$W_FONTSDIR_UNIX/Times.TTF" && \
-    #    w_workaround_wine_bug 22751 "Installing corefonts to prevent a Steam crash"
-    #then
-    #    w_call corefonts
-    #fi
-
-    if test $W_OPT_UNATTENDED; then
+    if [ -n "$W_OPT_UNATTENDED" ]; then
             w_ahk_do "
             run, SteamSetup.exe
             SetTitleMatchMode, 2
@@ -15037,11 +15969,14 @@ load_steam()
             ControlClick, Button2
             WinWaitClose
             "
+    elif [ -z "$W_OPT_UNATTENDED" ]; then
+            w_try "$WINE" "$W_CACHE/$W_PACKAGE/SteamSetup.exe"
     else
-            w_try "$WINE" SteamSetup.exe
+        w_die 255 "Steam W_OPT_UNATTENDED"
     fi
 
     # Not all users need this disabled, but let's play it safe for now
+    w_fixme "Verb Steam uses w_workaround_wine_bug which points to 22053 which is closed as NOTOURBUG"
     if w_workaround_wine_bug 22053 "Disabling gameoverlayrenderer to prevent game crashes on some machines."; then
         w_override_dlls disabled gameoverlayrenderer
     fi
@@ -15055,16 +15990,90 @@ w_metadata uplay apps \
     year="2013" \
     media="download" \
     file1="UplayInstaller.exe" \
-    installed_exe1="$W_PROGRAMS_X86_WIN/Ubisoft/Ubisoft Game Launcher/Uplay.exe"
+    installed_exe1="${W_PROGRAMS_X86_WIN}/Ubisoft/Ubisoft Game Launcher/Uplay.exe"
 
 load_uplay()
 {
     # Changes too frequently, don't check anymore
-    w_download https://static3.cdn.ubi.com/orbit/launcher_installer/UplayInstaller.exe
-    w_try_cd "$W_CACHE/$W_PACKAGE"
+    w_download 'https://ubistatic3-a.akamaihd.net/orbit/releases/winxp/installer/UplayInstaller.exe'
+    # New installer has issues with rendering on wine <4.15
+    #w_download https://static3.cdn.ubi.com/orbit/launcher_installer/UplayInstaller.exe
+
+    # Get workarounds
+    w_call 'corefonts'
+    # Required for client to open #1249 (winetricks)
+    w_set_app_winver 'upc.exe' 'winvista'
+    w_set_app_winver 'UbisoftGameLauncher.exe' 'winvista'
+    w_set_app_winver 'UbisoftGameLauncher64.exe' 'winvista'
+    w_set_app_winver 'Uplay.exe' 'winvista'
+    w_set_app_winver 'UplayService.exe' 'winvista'
+    w_set_app_winver 'UplayWebCore.exe' 'winvista'
+    w_set_app_winver 'UWebCore.exe' 'winvista'
+    w_set_app_winver 'Ubisoft Game Launcupc.exe' 'winvista'
+
+    w_warn "Launcher will output critical error which is non-fatal, press \"OK\" and ignore it."
 
     # NSIS installer
-    w_try "$WINE" UplayInstaller.exe ${W_OPT_UNATTENDED:+ /S}
+    w_try "${WINE}" "${W_CACHE}/uplay/UplayInstaller.exe" "${W_OPT_UNATTENDED:+ /S}"
+}
+
+#----------------------------------------------------------------
+
+w_metadata rockstar_game_launcher apps \
+    title="Rockstar Games Launcher" \
+    publisher="Rockstar Games" \
+    year="2019" \
+    media="download" \
+    file1="Rockstar-Games-Launcher.exe" \
+    installed_file1="C:/Program Files/Rockstar Games/Launcher/Launcher.exe"
+
+load_rockstar_game_launcher()
+{
+   # The installer will be updated often so can't use checksum
+    w_download https://gamedownloads.rockstargames.com/public/installer/Rockstar-Games-Launcher.exe
+
+    # Requires to be invoked on winver higher then win7
+    w_fixme "Verify if Launcher.exe is the only app that requires win10 winver"
+    w_set_app_winver Launcher.exe win10
+
+    # Apparently resolved in https://source.winehq.org/git/wine.git/commit/aa51aee1a92ddbdd39875af81b002654f8ad4fc7 (https://bugs.winehq.org/show_bug.cgi?id=48099)
+    if w_workaround_wine_bug 48099 '' ,4.18; then
+        w_warn "Affected by winebug 47912, skipping install using manuall extraction as workaround"
+        # Make sure that the expected directory is created for extraction
+        if [ ! -d "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/" ]; then
+            w_debug "Launcher folder not found, creating..."
+            w_try mkdir -p "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/"
+        elif [ -d "$WINEPREFIX/drive_c/Program Files/Rockstar/Games/Launcher/" ]; then
+            w_debug "Launcher folder already exists, no need to create the folder"
+        fi
+
+        # Checking if Rockstar-Games-Launcher.exe is already extracted
+        for i in $(7z l "$W_CACHE/$W_PACKAGE/Rockstar-Games-Launcher.exe"); do
+            if [ -e "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/$i" ]; then
+                w_debug "$i Found, no need to extract, skipping..."
+            elif [ ! -e "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/$i" ]; then
+                w_debug "$i Not Found, extracting..."
+                w_try 7z x -y "$W_CACHE/$W_PACKAGE/Rockstar-Games-Launcher.exe" "-o/$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher"
+                break
+            fi
+        done
+
+        # Self-check
+        [ ! -e "$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/$file1" ] && w_die 1 "Expected file '$WINEPREFIX/drive_c/Program Files/Rockstar Games/Launcher/$file1' is not found, assuming that used workaround is not sufficient"
+    elif ! w_workaround_wine_bug 47912; then
+        w_try "$WINE" "$W_CACHE/$W_PACKAGE/$file1"
+    fi
+
+    # Logic for graphical issues (https://bugs.winehq.org/show_bug.cgi?id=47794)
+    if w_workaround_wine_bug 47794; then
+        w_warn "currenly affected by winebug 47794 where we currently don't know any workarounds, expect some graphical issues on the launcher"
+    elif ! w_workaround_wine_bug 47794; then
+        w_info "Verb rockstar_game_launcher userland not affected by winebug 47794, please file an issue in kreytricks if you notice any graphical issues"
+    fi
+
+    # 15112019 - Using vcrun2017 since app is using it's libraries where winelibs are not sufficient
+    w_fixme "We are using vcrun2017 since wine's vcrun2017 libs are not sufficient, file a winebug"
+    w_call vcrun2017
 }
 
 #----------------------------------------------------------------
@@ -18002,31 +19011,12 @@ load_mtg_arena()
     w_warn "Affected by https://bugs.winehq.org/show_bug.cgi?id=45898"
   fi
 
-  # https://bugs.winehq.org/show_bug.cgi?id=45546
   if w_workaround_wine_bug 45546; then
-    if [ -n "$WINETRICKS_BUILD_WINE" ]; then
-      w_warn "We are about to build a wine from source and package it in AppImage"
-      wineappimagebuilder_patches() {
-        w_download "https://bugs.winehq.org/attachment.cgi?id=62956" '' "$W_CACHE/$W_PACKAGE/62956.diff"
-
-        if ! grep -qF "for (i = 0; i < 2000; i++)" "$wineappimagebuilder_workdir/wine-4.17/dlls/ntdll/thread.c"; then
-          patch "$wineappimagebuilder_workdir/wine-4.17/dlls/ntdll/thread.c" "$W_CACHE/$W_PACKAGE/62956.diff" || w_die "Failed to apply patch in '$wineappimagebuilder_workdir/wine-4.17/dlls/ntdll/thread.c'"
-        elif grep -qF "for (i = 0; i < 2000; i++)" "$wineappimagebuilder_workdir/wine-4.17/dlls/ntdll/thread.c"; then
-          w_debug "Patch for 45546 is already applied"
-        else w_die "Unexpected output in wineappimagebuilder_patches function"
-        fi
-      }
-      load_wineappimagebuilder
-    elif [ -z "$WINETRICKS_BUILD_WINE" ]; then
-      w_download "https://github.com/Kreyren/kreytricks/releases/download/7f230d2/MTGA.AppImage"
-    fi
-
-    # Sanitycheck for applied patches
-    [ "$WINE" != "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ] && [ "$WINE" != "$W_CACHE/$W_PACKAGE/$W_PACKAGE.AppImage" ] && w_die "This installer requires patched wine named MTGA.AppImage' or '$W_PACKAGE.AppImage' from '$W_CACHE/$W_PACKAGE/' provide this path to the WINE variable and execute the script again. (You can also blacklist winebug 45546)"
+    w_download "https://github.com/Kreyren/kreytricks/releases/download/7f230d2/MTGA.AppImage"
+    [ "$WINE" != "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ] && w_die "This installer requires patched wine from '$W_CACHE/$W_PACKAGE/MTGA.AppImage' provide this path to the WINE variable and execute the script again."
   fi
 
-  w_warn "It may take few seconds for installer to launch (max 50sec)"
-  (WINEDEBUG="fixme-all" w_try "$WINE" msiexec /i "$W_CACHE/$W_PACKAGE/$file1")
+  (WINEDEBUG="fixme-all" w_try "$WINE" msiexec /i "${W_CACHE}/${W_PACKAGE}/${file1}")
 }
 
 #----------------------------------------------------------------
@@ -18438,6 +19428,144 @@ load_lswcs()
 
 #----------------------------------------------------------------
 
+w_metadata leagueoflegends games \
+    title="League of Legends (Free, MOBA)" \
+    publisher="Riot Games, Inc" \
+    year="2009" \
+    media="download" \
+    installed_exe1="C:/Riot Games/League of Legends/LeagueClient.exe"
+
+load_leagueoflegends()
+{
+    # FETCH
+    ## Game has multiple regions and this logic allows end-user to choose it's preffered
+    case $leagueoflegends_region in
+        EUNE|EUW|NA|BR|LAN|LAS|OCE|RU|JP|SEA)
+            w_debug "Region '$leagueoflegends_region' is selected for leagueoflegends verb"
+        ;;
+        "")
+            w_fixme "Export variable leagueoflegends_region depending on end-user"
+            w_info "Variable leagueoflegends_region is not parsed, using default EUNE region (supported values are EUNE,EUW,NA,BR,LAN,LAS,OCE,RU,JP and SEA)"
+            leagueoflegends_region="EUNE"
+        ;;
+        *) w_die 2 "Parsed region '$leagueoflegends_region' in leagueoflegends_region variable is not valid, supported values are: EUNE,EUW,NA,BR,LAN,LAS,OCE,RU,JP,SEA"
+    esac
+
+    ## Actual fetch
+    w_fixme "Upstream didn't provide a checksum for it's executables https://boards.na.leagueoflegends.com/en/c/general-discussion/tZ4uPccJ-checksum-for-league-of-legends-installer"
+    if [ ! -e "$W_CACHE/$W_PACKAGE/leagueoflegends-$leagueoflegends_region.exe" ]; then
+        w_download_to "$W_CACHE/$W_PACKAGE" "https://riotgamespatcher-a.akamaihd.net/releases/live/installer/deploy/League%20of%20Legends%20installer%20$leagueoflegends_region.exe" '' "leagueoflegends-$leagueoflegends_region.exe"
+    elif [ -e "$W_CACHE/$W_PACKAGE/leagueoflegends-$leagueoflegends_region.exe" ]; then
+        w_debug "File 'leagueoflegends-$leagueoflegends_region.exe' already exists, no need to download it"
+    else
+        w_die 255 "leagueoflegends - fetch"
+    fi
+
+    # Install game and log-in, then exit
+    w_fixme "Game freezes randomly while updating for the first time"
+
+    w_fixme "Adapt Auto-login using keepass and autohotkey"
+        w_ahk_do "
+        SetTitleMatchMode, 2 ; no idea what this is
+        Run, Z:\\home\\$USER\\.cache\\winetricks\\leagueoflegends\\leagueoflegends-EUNE.exe
+        WinWait, League of Legends installer ; Wait untill expected window is present
+        Send {Enter} ; Sent Enter to press 'Next >' on first page of installer
+        "
+
+    w_die ping
+
+    w_try "$WINE" "$W_CACHE/$W_PACKAGE/leagueoflegends-$leagueoflegends_region.exe"
+
+
+    # Install d3dx9 wrapper
+    case $leagueoflegends_d3dx9 in
+        d9vk)
+            w_fixme "Refactor d9vk verb to export it's files in game directory as builtin instead of fucking up whole wineprefix"
+
+            # https://github.com/Joshua-Ashton/d9vk
+            leagueoflegends_d9vk_version="$(w_get_github_latest_prerelease Joshua-Ashton d9vk)"
+            leagueoflegends_d9vk_version="${leagueoflegends_d9vk_version#v}"
+            w_download "https://github.com/Joshua-Ashton/d9vk/releases/download/$leagueoflegends_d9vk_version/d9vk-$leagueoflegends_d9vk_version.tar.gz"
+
+            w_extractor "$W_CACHE/$W_PACKAGE/d9vk-$leagueoflegends_d9vk_version.tar.gz" "$WINEPREFIX/Riot Games/League of Legends/"
+
+            # Overrides
+            ## Exports for League Of Legends Game Client - Window used for login, shop and match making
+            w_try w_override_app_dlls LeagueClient.exe builtin dxgi.dll
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d10.dll
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d10_1.dll
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d10core.dll
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d11.dll
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d9.dll
+
+            ## Exports for League Of Legends Game Core - Game after champion selection
+            w_try w_override_app_dlls 'League of Legends.exe' builtin dxgi.dll
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d10.dll
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d10_1.dll
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d10core.dll
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d11.dll
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d9.dll
+
+            unset leagueoflegends_d9vk_version
+        ;;
+        dxvk)
+            w_die fixme "DXVK doesn't support league of legends without d9vk"
+        ;;
+        dgvoodoo2)
+            w_die fixme "dgvoodoo2 is not yet implemented for league of legends verb"
+        ;;
+        gallium9|galliumnine|galiumnine|galium9)
+            w_fixme "Combining galliumnine with dxv9/dgvoodo2 -> dxvk might improve the game performance"
+            w_fixme "Adapt galliumnine verb to export its libs in distdir and set them as builtin"
+
+            # Fetch galiumnine
+            leagueoflegends_galliumnine_version="$(w_get_github_latest_release iXit wine-nine-standalone)"
+            w_download "https://github.com/iXit/wine-nine-standalone/releases/download/$leagueoflegends_galliumnine_version/gallium-nine-standalone-$leagueoflegends_galliumnine_version.tar.gz"
+
+            w_extractor "$W_CACHE/$W_PACKAGE/gallium-nine-standalone-$leagueoflegends_galliumnine_version.tar.gz" "$W_TMP"
+
+            # Export libs
+            w_try "$W_TMP/gallium-nine-standalone/lib64/d3d9-nine.dll.so" "$WINEPREFIX/Riot Games/League of Legends/d3d9.dll"
+
+            ## Exports for League Of Legends Game Client - Window used for login, shop and match making
+            w_try w_override_app_dlls LeagueClient.exe builtin d3d9.dll
+
+            ## Exports for League Of Legends Game Core - Game after champion selection
+            w_try w_override_app_dlls 'League of Legends.exe' builtin d3d9.dll
+
+            unset leagueoflegends_galliumnine_version
+        ;;
+        "")
+            w_info "d3dx9 wrapper is not selected, using native d3dx9"
+            w_info "To use d3dx9 wrapper set variable leagueoflegends_d3dx9 on supported value such as: d9vk, dxvk, dgvoodoo2, gallium9"
+        ;;
+        *) w_die 255 "leagueoflegends - d3dx9"
+    esac
+
+    # https://bugs.winehq.org/show_bug.cgi?id=47198
+    # 19112019 - This affects all wine versions
+    if w_workaround_wine_bug 47198; then
+        w_die fixme "leagueoflegends verb is affected by winebug 47198 which causes it to trip pakman (RiotGames's anti-cheat) after champion select"
+    elif ! w_workaround_wine_bug 47198; then
+        w_debug "Not affected by winebug 47198 which causes wine users to trip pakman (RiotGames's anti-cheat) after champion select"
+    else
+        w_die 255 "leagueoflegends 47198"
+    fi
+
+    # https://bugs.winehq.org/show_bug.cgi?id=47915
+    # Workaround for champion select crash on <4.20
+    if w_workaround_wine_bug 47915 '' ,4.20; then
+        w_warn "On wine lower then 4.20 this requires https://github.com/wine-staging/wine-staging/blob/master/patches/user32-InternalGetWindowIcon/0001-user32-AddInternalGetWindowIcon-stub.patch to avoid crash after champion select"
+        w_fixme "Adapt w_wineappimage_builder for 47915 in leagueoflegends verb"
+    elif ! w_workaround_wine_bug 47915 '' ,4.20; then
+        w_debug "Not affected by winebug 47915 which causes leagueoflegends to crash after champion select"
+    else
+        w_die 255 "leagueoflegends - 47915"
+    fi
+}
+
+#----------------------------------------------------------------
+
 w_metadata lemonysnicket games \
     title="Lemony Snicket: A Series of Unfortunate Events" \
     publisher="Activision" \
@@ -18610,11 +19738,14 @@ load_masseffect2_demo()
 
     # Don't let self-extractor write into $W_CACHE
     case "$W_PLATFORM" in
-        windows_cmd|wine_cmd)
+        windows_cygwin|wine_cmd)
             cp "$W_CACHE/$W_PACKAGE/MassEffect2DemoEN.exe" "$W_TMP"
-            chmod +x "$W_TMP"/MassEffect2DemoEN.exe ;;
-        *)
-            ln -sf "$W_CACHE/$W_PACKAGE/MassEffect2DemoEN.exe" "$W_TMP" ;;
+            chmod +x "$W_TMP"/MassEffect2DemoEN.exe
+        ;;
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in load_masseffect2_demo()" ;;
+        nix_linux|nix_freebsd|nix_darwin) ln -sf "$W_CACHE/$W_PACKAGE/MassEffect2DemoEN.exe" "$W_TMP" ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in load_masseffect2_demo()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' parsed in load_masseffect2_demo()"
     esac
     w_try_cd "$W_TMP"
     w_ahk_do "
@@ -20238,6 +21369,74 @@ load_wog()
 }
 
 #----------------------------------------------------------------
+# Uplay Games
+#----------------------------------------------------------------
+
+w_metadata splintercell_blacklist_uplay games \
+    title="Tom Clancy Splinter Cell: Blacklist (Non-free, Uplay)" \
+    publisher="Ubisoft" \
+    year="2013" \
+    media="download" \
+    installed_exe1="$W_PROGRAMS_X86_WIN/Ubisoft/Ubisoft Game Launcher/games/Splinter Cell Blacklist/Blacklist_Launcher.exe"
+
+# shellcheck disable=SC2015
+load_splintercell_blacklist_uplay()
+{
+    # Is d3d11 wineapps
+    w_call dxvk
+    # has d3d9 support where wine libs are not sufficient
+    #w_call d9vk
+
+    w_uplay_install_game 91
+
+    # Disable startup logos
+    [ -e "$WINEPREFIX/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/games/Splinter Cell Blsklist/src/SYSTEM/Blacklist.ini" ] && { printf '%s\n' '%s/Logo_Ubisoft.bik/Logo_Ubisoft.bik.disabled/g' w | ed -s "$WINEPREFIX/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/games/Splinter Cell Blsklist/src/SYSTEM/Blacklist.ini" || w_warn "Unable to disable intro logos" ;} || w_warn "File $WINEPREFIX/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/games/Splinter Cell Blsklist/src/SYSTEM/Blacklist.ini does not exists, can not disable intro logos"
+}
+
+#----------------------------------------------------------------
+# Origin Games
+#----------------------------------------------------------------
+
+# https://appdb.winehq.org/appview.php?iVersionId=4242
+
+# Help-wanted: Dunno how to make metadata for this
+w_metadata cnc_redalert2yr_origin games \
+    title="Command & Conquer Red Alert 2 and Yuri\'s Revenge" \
+    publisher="EA Games" \
+    year="2001" \
+    media="download" \
+    installed_exe1="${W_PROGRAMS_X86_WIN}/Origin Games/Command and Conquer Red Alert II/RA2Launcher.exe"
+
+load_cnc_redalert2yr_origin()
+{
+    w_origin_install_game "OFB-EAST:52019"
+
+    # WINSOCK.dll
+    ## Sanity for directory in W_CACHE
+    [ ! -e "${W_CACHE}/cnc_redalert2yr_origin" ] && (mkdir "${W_CACHE}/cnc_redalert2yr_origin" || w_die "Unable to make a new directory in \'${W_CACHE}/cnc_redalert2yr_origin\'")
+
+    ## Fetch
+    if [ ! -e '/tmp/winetricks/ts_ra2_lanpatch_1_00 UDP no IPX win 7.zip' ]; then
+      wget 'https://www.sevenforums.com/attachments/gaming/88684d1280671096-command-conquer-red-alert-2-yuris-revenge-lan-ts_ra2_lanpatch_1_00-udp-no-ipx-win-7.zip' -O '/tmp/winetricks/ts_ra2_lanpatch_1_00 UDP no IPX win 7.zip' || w_die "Unable to download required libraries"
+    fi
+
+    ## Unzip to W_CACHE
+    [ ! -e "${W_CACHE}/cnc_redalert2yr_origin/wsock32.dll" ] && (unzip '/tmp/winetricks/ts_ra2_lanpatch_1_00 UDP no IPX win 7.zip' -d "${W_CACHE}/cnc_redalert2yr_origin/" || w_die "Unable to extract required files in \'${W_CACHE}/cnc_redalert2yr_origin/\' from '/tmp/winetricks/ts_ra2_lanpatch_1_00 UDP no IPX win 7.zip'")
+
+    ## Export of library
+    if [ -d "${W_PROGRAMS_X86_WIN}/Origin Games/Command and Conquer Red Alert II/" ] && [ -e "${W_CACHE}/cnc_redalert2yr_origin/wsock32.dll" ]; then
+      cp "${W_CACHE}/cnc_redalert2yr_origin/wsock32.dll" "${W_PROGRAMS_X86_WIN}/Origin Games/Command and Conquer Red Alert II/" || w_die "Unable to copy \'${W_CACHE}/cnc_redalert2yr_origin/wsock32.dll\' to \'${W_PROGRAMS_X86_WIN}/Origin Games/Command and Conquer Red Alert II/\' to use required library for game"
+    elif [ ! -d "${W_PROGRAMS_X86_WIN}/Origin Games/Command and Conquer Red Alert II/" ]; then
+      w_die "Unable to export required libraries, because game is not installed"
+    elif [ -e "${W_CACHE}/cnc_redalert2yr_origin/wsock32.dll" ]; then
+      w_warn "wsock.dll is alredy extracted, skipping..."
+    fi
+
+    # winetricks/1319#issuecomment-531471436
+    w_warn 'IPX network protocol is now disabled'
+}
+
+#----------------------------------------------------------------
 # Steam Games
 #----------------------------------------------------------------
 
@@ -20318,6 +21517,46 @@ load_civ5_demo_steam()
         w_info "If you already own the full Civ 5 game on Steam, the installer won't even appear."
     w_steam_install_game 65900 "Sid Meier's Civilization V - Demo"
     kill -s HUP "$_job"   # just in case
+}
+
+#----------------------------------------------------------------
+
+w_metadata rocketleague_steam games \
+    title="Rocket League (Free, Steam)" \
+    publisher="Psyonix" \
+    year="2015" \
+    media="download" \
+    installed_exe1="$W_PROGRAMS_X86_WIN/Steam/steamapps/common/rocketleague/Binaries/Win32/RocketLeague.exe"
+
+load_rocketleague_steam()
+{
+    w_steam_install_game 252950 "Rocket League"
+
+    # EXPERIMENT
+    w_download https://github.com/Joshua-Ashton/d9vk/releases/download/0.30/d9vk-0.30.tar.gz
+    w_extractor "$W_CACHE/$W_PACKAGE/d9vk-0.30.tar.gz" "$W_PROGRAMS_X86_WIN/Steam/steamapps/common/rocketleague/Binaries/Win32/"
+    w_override_app_dlls RocketLeague.exe builtin dgxi
+    w_override_app_dlls RocketLeague.exe builtin d3d9
+    w_override_app_dlls RocketLeague.exe builtin d3d10
+    w_override_app_dlls RocketLeague.exe builtin d3d10_1
+    w_override_app_dlls RocketLeague.exe builtin d3d10core
+    w_override_app_dlls RocketLeague.exe builtin d3d11
+}
+
+#----------------------------------------------------------------
+
+w_metadata mafia2_steam games \
+    title="Mafia II (Steam, non-free)" \
+    publisher="2K Games" \
+    year="2009" \
+    media="download" \
+    installed_exe1="$W_PROGRAMS_X86_WIN/Steam/steamapps/common/Mafia II/launcher.exe"
+
+load_mafia2_steam()
+{
+    w_call 'vcrun2012'
+    w_call 'dxvk'
+    w_steam_install_game 50130 "Mafia II"
 }
 
 #----------------------------------------------------------------
@@ -21260,7 +22499,7 @@ load_remove_mono()
     mono_uuid="$("${WINE_ARCH}" uninstaller --list | grep 'Wine Mono' | cut -f1 -d\|)"
     if test "$mono_uuid"; then
         for uuid in $mono_uuid;
-	    do "${WINE_ARCH}" uninstaller --remove "$uuid"
+            do "${WINE_ARCH}" uninstaller --remove "$uuid"
         done
     else
         # Bail out if mono isn't installed, so we don't break .Net setups
@@ -21627,8 +22866,11 @@ winetricks_stats_log_command()
 
     # and for the user's own reference later, when figuring out what he did
     case "$W_PLATFORM" in
-        windows_cmd) _W_LOGDIR="$W_WINDIR_UNIX"/Temp ;;
-        *) _W_LOGDIR="$WINEPREFIX" ;;
+        windows_cygwin) _W_LOGDIR="$W_WINDIR_UNIX"/Temp ;;
+        windows_windows) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_stats_log_command()" ;;
+        nix_linux|nix_freebsd|nix_darwin) _W_LOGDIR="$WINEPREFIX" ;;
+        nix_redox) w_die "Platform '$W_PLATFORM' is not implemented in winetricks_stats_log_command()" ;;
+        *) w_die "Unknown platform '$W_PLATFORM' parsed in winetricks_stats_log_command()"
     esac
 
     mkdir -p "$_W_LOGDIR"
@@ -21821,13 +23063,13 @@ then
             ;;
         "")
             if [ -z "$DISPLAY" ]; then
-                if [ "$(uname -s)" = "Darwin" ]; then
-                    echo "Running on OSX, but DISPLAY is not set...probably using Mac Driver."
-                else
-                    echo "DISPLAY not set, not defaulting to gui"
-                    winetricks_usage
-                    exit 0
-                fi
+                case "$W_PLATFORM" in
+                    nix_darwin) w_info "Running on OSX, but DISPLAY is not set...probably using Mac Driver." ;;
+                    *)
+                        w_info "DISPLAY not set, not defaulting to gui"
+                        winetricks_usage
+                        exit 0
+                esac
             fi
 
             # GUI case
