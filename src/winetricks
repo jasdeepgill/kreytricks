@@ -15659,6 +15659,60 @@ load_openwatcom()
 
 #----------------------------------------------------------------
 
+w_metadata powershell1 apps \
+    title="Microsoft Powershell" \
+    publisher="Microsoft" \
+    year="2006" \
+    media="download" \
+    file1="WindowsServer2003-KB926139-v2-x86-ENU.exe" \
+    file2="WindowsServer2003.WindowsXP-KB926139-v2-x64-ENU.exe" \
+    installed_file1="C:/windows/syswow64/powershell.exe" \
+    #installed_file2="C:/windows/system32/powershell.exe"
+
+load_powershell1()
+{
+    w_download "https://download.microsoft.com/download/d/e/7/de7cb629-73a3-49cc-b796-50dfaaf1b833/$file1"
+
+    # Requires dotnet20 libs
+    w_fixme "File a tracking to run powershell on mono"
+    w_call dotnet20
+
+    w_fixme "Powershell x86 doesn't work"
+    # # Requires winxp otherwise it fails (https://github.com/Kreytricks/kreytricks/pull/21#issuecomment-557271075)
+    # w_fixme "Set winver per executable"
+    # w_set_winver winxp
+    #
+    # "$WINE" "$W_CACHE/$W_PACKAGE/$file2"
+    #
+    # case $? in
+    #     5) w_die "File $file1 returned error code $? which seems to indicate system issue like missing dotnet20 libs" ;;
+    #     67) w_die "File $file1 returned error code $? which seems to indicate unsupported system" ;;
+    #     *) w_warn "File $file1 returned unknown error code: $? (file an issue in kreytricks if you encounter this message)"
+    # esac
+    #
+    # w_set_winver default
+
+    if [ "$W_ARCH" = win64 ]; then
+        w_download "https://download.microsoft.com/download/c/3/0/c30e0a7f-fe2c-466e-81a8-f01f906c372a/$file2"
+
+        # Requires winxp otherwise it fails (https://github.com/Kreytricks/kreytricks/pull/21#issuecomment-557271075)
+        w_fixme "Set winver per executable"
+        w_set_winver winxp
+
+        "$WINE" "$W_CACHE/$W_PACKAGE/$file2"
+
+        case $? in
+            5) w_die "File $file2 returned error code $? which seems to indicate system issue like missing dotnet20 libs" ;;
+            67) w_die "File $file2 returned error code $? which seems to indicate unsupported system" ;;
+            *) w_warn "File $file2 returned unknown error code: $? (file an issue in kreytricks if you encounter this message)"
+        esac
+
+        w_set_winver default
+    fi
+}
+
+#----------------------------------------------------------------
+
 w_metadata protectionid apps \
     title="Protection ID" \
     publisher="CDKiLLER & TippeX" \
