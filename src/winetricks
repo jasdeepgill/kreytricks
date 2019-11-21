@@ -19030,15 +19030,44 @@ load_mtg_arena()
     if w_workaround_wine_bug 45546; then
         w_fixme "Make a logic for 45546 in mtg_arena verb"
         w_download "https://github.com/Kreyren/kreytricks/releases/download/7f230d2/MTGA.AppImage"
-        [ "$WINE" != "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ] && w_info "This installer requires hack-patched wine from '$W_CACHE/$W_PACKAGE/MTGA.AppImage' which will be provided in shortcut, use this shortcut to workaround 45546"
+        [ ! -x "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ] && chmod +x "$W_CACHE/$W_PACKAGE/MTGA.AppImage"
+        if [ "$WINE" != "$W_CACHE/$W_PACKAGE/MTGA.AppImage" ]; then
+            w_info "This installer requires hack-patched wine from '$W_CACHE/$W_PACKAGE/MTGA.AppImage' which will be provided in shortcut, use this shortcut to workaround 45546"
+            myWINE="$W_CACHE/$W_PACKAGE/MTGA.AppImage"
+        fi
     elif ! w_workaround_wine_bug 45546; then
         w_debug "Not affected by winebug 45546 which causes game to exit on startup"
+        myWINE="$WINE"
     else
         w_die 255 "mtg_arena - 45546"
     fi
 
     # Wrapped in '()' to avoid exporting WINEDEBUG
-    (WINEDEBUG="fixme-all" w_try "$WINE" msiexec /i "${W_CACHE}/${W_PACKAGE}/${file1}")
+    if [ "$file1" = MTGAInstaller.exe ]; then
+        (
+            WINEDEBUG="fixme-all" "$myWINE" "$W_CACHE/$W_PACKAGE/$file1"
+
+            case $? in
+                2) w_die "File $file1 returned $? which seems to indicate some error related to wine being unable to open the installer" ;;
+                66)
+                    w_fixme "Implement workaround for $file1 returning $?"
+                    w_die "File $file1 returned $? which seems to be related to 'custom_get_thread_return Invalid Return Code 1627' that is related to https://bugs.winehq.org/show_bug.cgi?id=47820"
+                ;;
+                126) w_die "File $file1 returned $? which seems to indicate permission issue" ;;
+                *) w_info "File $file1 returned $? which is unknown to winetricks"
+            esac
+        )
+    elif [ "$file1" = MTGAInstaller_0.1.1790.733462.msi ]; then
+        (
+            WINEDEBUG="fixme-all" "$WINE" msiexec /i "$W_CACHE/$W_PACKAGE/$file1"
+
+            case $? in
+                *) w_info "File $file1 returned $? which is unknown to winetricks"
+            esac
+        )
+    else
+        w_die 255 "mtg_arena - exec"
+    fi
 
     # Generate custom shortcut with expected WINE
     w_fixme "Implement shortcut generation without following printf syntax"
@@ -19050,7 +19079,7 @@ load_mtg_arena()
             "  export WINEPREFIX=\"$WINEPREFIX\"" \
             "  export WINEDEBUG=\"-all\"" \
             "  export DXVK_HUD=\"fps\"" \
-            "  export WINE=\"$W_CACHE/$W_PACKAGE/MTGA.AppImage\"" \"
+            "  export WINE=\"$myWINE\"" \"
             "  \"$WINE\" start \"$installed_exe1\"" \
             ")" \
         > "$WINEPREFIX/${W_PACKAGE}_shortcut.sh"
