@@ -14860,11 +14860,14 @@ load_wmf()
     ls -la "$W_TMP"
 
     w_fixme "File a bug that tracks wusa"
-    if w_workaround_wine_bug XXXXX; then
+    if w_workaround_wine_bug 48147; then
         w_warn "Current wine is unable to run $file1 using wusa, using w_extractor for manual extraction"
-        mkdir "$W_TEMP/thing"
-        w_extractor "$W_TMP/Win7-KB3191566-x86.msu" "$W_TMP/thing/"
-    elif ! w_workaround_wine_bug XXXXX; then
+        mkdir "$W_TEMP/WMF"
+        w_extractor "$W_TMP/Win7-KB3191566-x86.msu" "$W_TMP/WMF/"
+        ls -la "$W_TMP/WMF/"
+
+        w_die fixme "Workaround for 48147 in wmf verb is not sufficient"
+    elif ! w_workaround_wine_bug 48147; then
         if [ -e "$WINEPREFIX/drive_c/windows/system32/wusa.exe" ]; then
             "$WINE" "$WINEPREFIX/drive_c/windows/system32/wusa.exe" "$W_CACHE/$W_PACKAGE/$W_TMP/Win7-KB3191566-x86.msu"
 
@@ -14872,6 +14875,8 @@ load_wmf()
                 1) w_die 1 "File Win7-KB3191566-x86.msu executed using $WINEPREFIX/drive_c/windows/system32/wusa.exe returned false, assuming insufficient implementation in wine, please file an issue in kreytricks if you encounter this message" ;;
                 *) w_warn "File Win7-KB3191566-x86.msu executed using $WINEPREFIX/drive_c/windows/system32/wusa.exe returned unknown error code: $?"
             esac
+        elif [ ! -e "$WINEPREFIX/drive_c/windows/system32/wusa.exe" ]; then
+            w_die fixme "This wine doesn't have $WINEPREFIX/drive_c/windows/system32/wusa.exe, please file a bug in kreytricks if you encountered this message"
         fi
     fi
 
@@ -14880,6 +14885,8 @@ load_wmf()
     if [ $W_ARCH = win64 ]; then
       # Download 64-bit WMF (Windows Management Framework) - Dependency for powershell
       w_download "http://download.microsoft.com/download/6/F/5/6F5FF66C-6775-42B0-86C4-47D41F2DA187/Win7AndW2K8R2-KB3191566-x64.zip"
+
+      w_die fixme "Installation of wm for 64-bit is not implemented"
     fi
 }
 
