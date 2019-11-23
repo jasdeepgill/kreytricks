@@ -620,6 +620,8 @@ w_extractor()
         w_die 2 "Function 'w_extractor' expects two variables, but second variable destdir '$destdir' is blank"
     fi
 
+    expected_files="$*"
+
     # We are expecting two arguments
     [ -z "$destdir" ] && w_die 2 "w_extractor expects two arguments, but only one was parsed: file - '$file' ; destdir - '$destdir'"
 
@@ -629,13 +631,13 @@ w_extractor()
               unzip -d "$destdir" "$file" || w_die "w_extractor was not able to extract '$file' using unzip"
               w_fixme "w_extractor .zip - Make sure that the file was extracted successfully"
           elif w_check_exec 7z; then
-              7z x "$file" -d "$destdir"
+              7z x "$file" -o"$destdir" "$expected_files"
               w_fixme "w_extractor .zip - Make sure that the file was extracted successfully"
           elif ! w_check_exec 7z && ! w_check_exec unzip && [ -n "$WINETRICKS_FORCE_WIN_7Z" ]; then
               WINETRICKS_OPT_SHAREDPREFIX=1 w_call 7zip
 
               # errors out if there is a space between -o and path
-              w_try "$WINE" start 7z x "$(w_pathconv -w "$file")" -o"$(w_pathconv -w "$destdir")"
+              w_try "$WINE" start 7z x "$(w_pathconv -w "$file")" -o"$(w_pathconv -w "$destdir")" "$expected_files"
 
               w_fixme "w_extractor .zip - Make sure that the file was extracted successfully"
           fi
@@ -670,9 +672,10 @@ w_extractor()
           w_fixme "w_extractor .tar.gz - Make sure that the file was extracted successfully"
       ;;
       *.exe)
+          w_fixme "w_extractor .exe - implement 7z using wine if 7z is not installed on the system"
           if w_check_exec 7z; then
-              7z x "$file" -d "$destdir" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using 7z"
-              w_fixme "w_extractor .exe - implement 7z using wine if 7z is not installed on the system"
+              w_fixme "w_extractor,*.exe - output expected files only if variable is not blank"
+              7z x "$file" -o"$destdir" "$expected_files" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using 7z with expected files '$expected_files'"
           elif ! w_check_exec 7z && w_check_exec cabextract; then
               cabextract -q "$@" -d "$destdir" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using cabextract"
           else
@@ -681,7 +684,7 @@ w_extractor()
       ;;
       *.dl_)
           if w_check_exec 7z; then
-              7z x "$file" -d "$destdir" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using 7z"
+              7z x "$file" -o"$destdir" "$expected_files" || w_die 1 "w_extractor is unable to extract '$file' in '$destdir' using 7z"
           elif ! w_check_exec 7z; then
               w_fixme "Function w_extractor - Unable to extract '$file', because system 7z is not installed and using wine's 7z is not implemented"
           else
@@ -693,7 +696,7 @@ w_extractor()
       *) w_die 2 "File '$file' is not supported by function w_extractor, should it be supported? File an issue in kreytricks"
     esac
 
-    unset file destdir
+    unset file destdir expected_files
 }
 
 # Generate yaml file for lutris to run kreytricks
