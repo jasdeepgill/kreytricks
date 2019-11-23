@@ -8700,7 +8700,8 @@ w_metadata dotnet20 dlls \
     media="download" \
     conflicts="dotnet20sp1 dotnet20sp2 dotnet30sp1 dotnet35" \
     file1="dotnetfx.exe" \
-    installed_file1="c:/windows/Microsoft.NET/Framework/v2.0.50727/MSBuild.exe"
+    file2="NetFx64.exe" \
+    installed_file1="C:/windows/Microsoft.NET/Framework/v2.0.50727/MSBuild.exe"
 
 load_dotnet20()
 {
