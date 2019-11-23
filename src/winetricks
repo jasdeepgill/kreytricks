@@ -15745,7 +15745,6 @@ load_powershell1()
     # w_set_winver default
 
     if [ "$W_ARCH" = win64 ]; then
-        w_fixme "powershell1 installation for 64-bit is holding wineserver after it's installation for some reason, fix needed"
         w_download "https://download.microsoft.com/download/c/3/0/c30e0a7f-fe2c-466e-81a8-f01f906c372a/$file2"
 
         # Requires winxp otherwise it fails (https://github.com/Kreytricks/kreytricks/pull/21#issuecomment-557271075)
@@ -15773,7 +15772,9 @@ load_powershell1()
                     run $(w_pathconv -w $W_CACHE/$W_PACKAGE/$file2)
                 "
             elif [ -z "$W_OPT_UNATTENDED" ]; then
-                "$WINE" "$W_CACHE/$W_PACKAGE/$file2"
+                # Using '&' as hotfix
+                w_fixme "powershell1 installation for 64-bit is holding wineserver after it's installation for some reason, fix needed"
+                "$WINE" "$W_CACHE/$W_PACKAGE/$file2" &
 
                 case $? in
                     5) w_die "File $file2 returned error code $? which seems to indicate system issue like missing dotnet20 libs" ;;
@@ -19267,7 +19268,7 @@ load_mtg_arena()
         # Requires dotnet? otherwise the installer fails
         w_fixme "File a tracking in mono for winebug 47820 usage of dotnet"
         w_fixme "mtg_arena - Cherrypick which dotnet it wants to cut down the time"
-        w_call dotnet48
+        w_call dotnet462
         # Requires powershell to not fatal
         w_call powershell1
         export file1="MTGAInstaller.exe"
