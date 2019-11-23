@@ -15075,27 +15075,37 @@ w_metadata ie8_new dlls \
 load_ie8_new()
 {
     # Fetch - These are for winxp
-    w_download https://download.microsoft.com/download/C/C/0/CC0BD555-33DD-411E-936B-73AC6F95AE11/IE8-WindowsXP-x86-ENU.exe 5a2c6c82774bfe99b175f50a05b05bcd1fac7e9d0e54db2534049209f50cd6ef
+    w_download "https://download.microsoft.com/download/C/C/0/CC0BD555-33DD-411E-936B-73AC6F95AE11/$file1" 5a2c6c82774bfe99b175f50a05b05bcd1fac7e9d0e54db2534049209f50cd6ef
+
+    w_fixme "Set winver per executable"
+    w_set_winver win2k3
+
+    # Export requried iexplore
+    #w_override_dlls native admparse advpack hmmapi icardie ieakeng ieaksie ieakui iedkcs32 iedvtool ieframe iepeers iernonce iertutil iesetup ieui inseng jscript jsdbgui jsdebuggeride jsprofilercore jsprofilerui licmgr10 msfeedsbs mshtml mshtmler msrating occache sqmapi urlmon vbscript webcheck wininet
 
     if w_workaround_wine_bug 34048; then
-        w_download_to "$W_CACHE/$W_PACKAGE" https://bugs.winehq.org/attachment.cgi?id=65709 '' "iexplore.exefake32"
+        w_download_to "$W_CACHE/$W_PACKAGE" https://bugs.winehq.org/attachment.cgi?id=65709 318ca190ffcc788e822fd7e0616ce44d9388c08261a3f1c19517e65a4f5c0732 "iexplore.exefake32"
 
         # 20112019 - Disable winelibed iexplore since version used in wine is not high enough for isetup.exe to pass sanity check (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554618780)
-        if [ -e "$W_SYSTEM32_DLLS/iexplore.exe" ] && [ ! -e "$W_SYSTEM32_DLLS/iexplore.exe.bak" ]; then
-            w_try mv "$W_SYSTEM32_DLLS/iexplore.exe" "$W_SYSTEM32_DLLS/iexplore.exe.bak"
-          elif [ ! -e "$W_SYSTEM32_DLLS/iexplore.exe" ]; then
-            w_debug "File '$W_SYSTEM32_DLLS/iexplore.exe' is already renamed on '$W_SYSTEM32_DLLS/iexplore.exe.bak'"
-          fi
+        if [ -e "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe" ]; then
+            w_try mv "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe" "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe.bak"
+        elif [ ! -e "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe" ] && [ -e "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe.bak" ]; then
+            w_debug "File '$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe' is already renamed on '$$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe.bak'"
+        else
+            w_die 255 "backup of '$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe'"
+        fi
 
-        # Export requried iexplore
-        w_try "$WINE" iexplore -unregserver
-        w_override_dlls native admparse advpack hmmapi icardie ieakeng ieaksie ieakui iedkcs32 iedvtool ieframe iepeers iernonce iertutil iesetup ieui inseng jscript jsdbgui jsdebuggeride jsprofilercore jsprofilerui licmgr10 msfeedsbs mshtml mshtmler msrating occache sqmapi urlmon vbscript webcheck wininet
-        mkdir "$W_TMP/iexplore/"
-        w_try cp "$W_CACHE/$W_PACKAGE/iexplore.exefake32" "$W_TMP/iexplore/"
-        w_try cp "$W_CACHE/$W_PACKAGE/$file1" "$W_TMP/iexplore/"
-        w_override_dlls builtin iexplore
-        w_try cp "$W_CACHE/$W_PACKAGE/iexplore.exefake32" "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe"
+        if [ -e "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe" ]; then
+            w_try mv "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe" "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe.bak"
+        elif [ ! -e "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe" ] && [ -e "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe.bak" ]; then
+            w_debug "File '$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe' is already renamed on '$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe.bak'"
+        else
+            w_die 255 "backup of '$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe'"
+        fi
 
+        w_fixme "Sandbox for iexplore.exe only"
+        w_try cp -f "$W_CACHE/$W_PACKAGE/iexplore.exefake32" "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe"
+        w_try cp -f "$W_CACHE/$W_PACKAGE/iexplore.exefake32" "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe"
     elif ! w_workaround_wine_bug 34048; then
         w_debug "This system is able to run file $file1 on 64-bit wineprefix"
     else
@@ -15128,26 +15138,50 @@ load_ie8_new()
         w_fixme "file a winebug for $file2 runtime"
         # https://bugs.winehq.org/show_bug.cgi?id=34048
         if w_workaround_wine_bug 34048; then
-            w_fixme "stub"
+            w_download_to "$W_CACHE/$W_PACKAGE" https://bugs.winehq.org/attachment.cgi?id=65710 65eaae7b2165fe4415bfb123eb179cbdd24d77ce41fe62c9ea5850f1ca83d0b6 "iexplore.exefake64"
+            # 20112019 - Disable winelibed iexplore since version used in wine is not high enough for isetup.exe to pass sanity check (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554618780)
+            if [ -e "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe" ]; then
+                w_try mv "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe" "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe.bak"
+            elif [ ! -e "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe" ] && [ -e "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe.bak" ]; then
+                w_debug "File '$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe' is already renamed on '$$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe.bak'"
+            else
+                w_die 255 "backup of '$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe'"
+            fi
 
+            if [ -e "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe" ]; then
+                w_try mv "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe" "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe.bak"
+            elif [ ! -e "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe" ] && [ -e "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe.bak" ]; then
+                w_debug "File '$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe' is already renamed on '$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe.bak'"
+            else
+                w_die 255 "backup of '$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe'"
+            fi
+
+            w_fixme "Sandbox for iexplore.exe only"
+            w_try cp -f "$W_CACHE/$W_PACKAGE/iexplore.exefake64" "$WINEPREFIX/drive_c/windows/syswow64/iexplore.exe"
+            w_try cp -f "$W_CACHE/$W_PACKAGE/iexplore.exefake64" "$WINEPREFIX/drive_c/Program Files/Internet Explorer/iexplore.exe"
         elif ! w_workaround_wine_bug 34048; then
-            # Do not use w_try since we are capturing error code
-            w_fixme "Verb ie8 installation of 64-bit version can be improved using arguments (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554583771)"
-            "$WINE" "$W_CACHE/$W_PACKAGE/$file2"
-
-            # Capture the error code
-            case $? in
-                0)
-                    w_info "File $file2 returned $?, assuming that it was installed correctly"
-                    w_warn "This may return $? even on failure"
-                ;;
-                7) w_die "File $file2 returned $? which error code which seems to be related to system not supported, trigger for this is unknown and required to run on 64-bit wineprefix (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554576478)" ;;
-                *) w_die "File $file2 returned error code '$?' which is unknown to winetricks, please make an issue about it with method to reproduce it"
-            esac
+            w_info "Not affected by winebug 34048 which causes the installer to return false on wrong version detected"
         else
             w_die 125 "ie8 - w_workaround_wine_bug 34048 (64-bit)"
         fi
+
+        w_fixme "Verb ie8 installation of 64-bit version can be improved using arguments (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554583771)"
+
+        # Do not use w_try since we are capturing error code
+        "$WINE" "$W_CACHE/$W_PACKAGE/$file2"
+
+        # Capture the error code
+        case $? in
+            0)
+                w_info "File $file2 returned $?, assuming that it was installed correctly"
+                w_warn "This may return $? even on failure"
+            ;;
+            7) w_die "File $file2 returned $? which error code which seems to be related to system not supported, trigger for this is unknown and required to run on 64-bit wineprefix (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554576478)" ;;
+            *) w_die "File $file2 returned error code '$?' which is unknown to winetricks, please make an issue about it with method to reproduce it"
+        esac
     fi
+
+    w_set_winver default
 
     # # DO-NOT-MERGE: Remove this prior to merge
     w_warn "EXECUTING!!"
