@@ -23361,8 +23361,20 @@ execute_command()
     esac
 }
 
-if ! test "$WINETRICKS_LIB"
-then
+# Open AHK inspector if debugging
+if [ -n "$W_DEBUG_AHK" ]; then
+    w_fixme "Improve handling of W_DEBUG variable to call this using 'W_DEBUG=\"+ahk\"'"
+    w_call autohotkey
+    if [ -e "$WINEPREFIX/drive_c/Program Files (x86)/AutoHotkey/AU3_Spy.exe" ]; then
+        w_try "$WINE" "$WINEPREFIX/drive_c/Program Files (x86)/AutoHotKey/AU3_Spy.exe" &
+    elif [ ! -e "$WINEPREFIX/drive_c/Program Files (x86)/AutoHotkey/AU3_Spy.exe" ]; then
+        w_die 1 "File '$WINEPREFIX/drive_c/Program Files (x86)/AutoHotKey/AU3_Spy.exe' doesn't exists assuming variable 'W_DEBUG_AHK' calling autohotkey inspector"
+    else
+        w_die 255 "w_do_call - W_DEBUG_AHK"
+    fi
+fi
+
+if ! test "$WINETRICKS_LIB"; then
     # If user opted out, save that preference now.
     winetricks_stats_save
 
