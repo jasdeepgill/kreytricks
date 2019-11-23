@@ -15721,17 +15721,13 @@ w_metadata powershell1 apps \
     year="2006" \
     media="download" \
     file1="WindowsServer2003-KB926139-v2-x86-ENU.exe" \
-    file2="WindowsServer2003.WindowsXP-KB926139-v2-x64-ENU.exe" \
-    installed_file1="C:/windows/syswow64/powershell.exe" \
+    file2="WindowsServer2003.WindowsXP-KB926139-v2-x64-ENU.exe"
+    #installed_file1="C:/windows/syswow64/powershell.exe" \
     #installed_file2="C:/windows/system32/powershell.exe"
 
 load_powershell1()
 {
     w_download "https://download.microsoft.com/download/d/e/7/de7cb629-73a3-49cc-b796-50dfaaf1b833/$file1"
-
-    # Requires dotnet20 libs
-    w_fixme "File a tracking to run powershell on mono"
-    w_call dotnet20
 
     w_fixme "Powershell x86 doesn't work"
     # # Requires winxp otherwise it fails (https://github.com/Kreytricks/kreytricks/pull/21#issuecomment-557271075)
@@ -15749,19 +15745,47 @@ load_powershell1()
     # w_set_winver default
 
     if [ "$W_ARCH" = win64 ]; then
+        w_fixme "powershell1 installation for 64-bit is holding wineserver after it's installation for some reason, fix needed"
         w_download "https://download.microsoft.com/download/c/3/0/c30e0a7f-fe2c-466e-81a8-f01f906c372a/$file2"
 
         # Requires winxp otherwise it fails (https://github.com/Kreytricks/kreytricks/pull/21#issuecomment-557271075)
         w_fixme "Set winver per executable"
+        w_fixme "File a tracking for winxp requirement"
         w_set_winver winxp
 
-        "$WINE" "$W_CACHE/$W_PACKAGE/$file2"
+        if w_workaround_wine_bug XXXXX; false; then
+            w_die fixme "powershell1 - XXXXX we don't know what needs to be exported"
 
-        case $? in
-            5) w_die "File $file2 returned error code $? which seems to indicate system issue like missing dotnet20 libs" ;;
-            67) w_die "File $file2 returned error code $? which seems to indicate unsupported system" ;;
-            *) w_warn "File $file2 returned unknown error code: $? (file an issue in kreytricks if you encounter this message)"
-        esac
+            if [ -e "$WINEPREFIX/drive_c/windows/system32/powershell.exe" ]; then
+                mv "$WINEPREFIX/drive_c/windows/system32/powershell.exe" "$WINEPREFIX/drive_c/windows/system32/powershell.exe.bak"
+            elif [ ! -e "$WINEPREFIX/drive_c/windows/system32/powershell.exe" ]; then
+                w_debug "File '$WINEPREFIX/drive_c/windows/system32/powershell.exe' doesn't exists so no need to make a backup"
+            else
+                w_die 255 "powershell1 - XXXXX"
+            fi
+
+            w_extractor "$W_CACHE/$W_PACKAGE/$file2" "$WINEPREFIX/drive_c/windows/system32" powershell.exe management.dll management.dll resources.dll utility.dll utility.dll resources.dll consolehost.dll consolehost.dll resources.dll security.dll security.dll resources.dll pwrshmsg.dll pwrshsip.dll spmsg.dll automation.dll automation.dll resources.dll management.dll utility.dll consolehost.dll security.dll wpwrshmsg.dll wpwrshsip.dll automation.dll spcustom.dll updspapi.dll
+        elif ! w_workaround_wine_bug XXXXX; true; then
+            if [ -n "$W_OPT_UNATTENDED" ]; then
+                w_die fixme "powershell1 needs W_OPT_UNATTENDED using ahk"
+                w_ahk_do "
+                    SetTitleMatchMode, 2
+                    run $(w_pathconv -w $W_CACHE/$W_PACKAGE/$file2)
+                "
+            elif [ -z "$W_OPT_UNATTENDED" ]; then
+                "$WINE" "$W_CACHE/$W_PACKAGE/$file2"
+
+                case $? in
+                    5) w_die "File $file2 returned error code $? which seems to indicate system issue like missing dotnet20 libs" ;;
+                    67) w_die "File $file2 returned error code $? which seems to indicate unsupported system" ;;
+                    *) w_warn "File $file2 returned unknown error code: $? (file an issue in kreytricks if you encounter this message)"
+                esac
+            else
+                w_die 255 "powershell1 - W_OPT_UNATTENDED - 64"
+            fi
+          else
+              w_die 255 "powershel1 - XXXXX"
+        fi
 
         w_set_winver default
     fi
