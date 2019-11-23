@@ -445,48 +445,56 @@ w_die()
             fi
         ;;
         32)
-            if [ -n "$2" ]; then
-                case $LANG in
-                    en*)
-                        printf 'FATAL: %s\n' "$2" 1>&2
-                    ;;
-                    *)
-                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
-                esac
-            elif [ -z "$2" ]; then
-                case $LANG in
-                    en*)
-                        printf 'FATAL: %s\n' "64-bit system is not supported for package '$W_PACKAGE'" 1>&2
-                    ;;
-                    *)
-                        printf 'FATAL: %s\n' "64-bit system is not supported for package '$W_PACKAGE'$untranslated" 1>&2
-                esac
-            else
-                w_die 255 'w_die 32'
+            if [ "$W_ARCH" = win64 ]; then
+                if [ -n "$2" ]; then
+                    case $LANG in
+                        en*)
+                            printf 'FATAL: %s\n' "$2" 1>&2
+                        ;;
+                        *)
+                            printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                    esac
+                elif [ -z "$2" ]; then
+                    case $LANG in
+                        en*)
+                            printf 'FATAL: %s\n' "64-bit system is not supported for package '$W_PACKAGE'" 1>&2
+                        ;;
+                        *)
+                            printf 'FATAL: %s\n' "64-bit system is not supported for package '$W_PACKAGE'$untranslated" 1>&2
+                    esac
+                else
+                    w_die 255 'w_die 32'
+                fi
+                exit 32
+            elif [ "$W_ARCH" = win32 ]; then
+                w_debug "w_die 32 called on win32, passing"
             fi
-            exit 32
         ;;
         64)
-            if [ -n "$2" ]; then
-                case $LANG in
-                    en*)
-                        printf 'FATAL: %s\n' "$2" 1>&2
-                    ;;
-                    *)
-                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
-                esac
-            elif [ -z "$2" ]; then
-                case $LANG in
-                    en*)
-                        printf 'FATAL: %s\n' "32-bit system is not supported for '$*'" 1>&2
-                    ;;
-                    *)
-                        printf 'FATAL: %s\n' "32-bit system is not supported for '$*'$untranslated" 1>&2
-                esac
-            else
-                w_die 255 'w_die 64'
+            if [ "$W_ARCH" = win32 ]; then
+                if [ -n "$2" ]; then
+                    case $LANG in
+                        en*)
+                            printf 'FATAL: %s\n' "$2" 1>&2
+                        ;;
+                        *)
+                            printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                    esac
+                elif [ -z "$2" ]; then
+                    case $LANG in
+                        en*)
+                            printf 'FATAL: %s\n' "32-bit system is not supported for '$*'" 1>&2
+                        ;;
+                        *)
+                            printf 'FATAL: %s\n' "32-bit system is not supported for '$*'$untranslated" 1>&2
+                    esac
+                else
+                    w_die 255 'w_die 64'
+                fi
+                exit 64
+            elif [ "$W_ARCH" = win64 ]; then
+                w_debug "w_die 64 called on 64-bit system, passing"
             fi
-            exit 64
         ;;
         126) # Not executable
             case $LANG in
