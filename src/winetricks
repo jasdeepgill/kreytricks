@@ -15793,6 +15793,84 @@ load_powershell1()
 
 #----------------------------------------------------------------
 
+w_fixme "powershell2 needs year metadata"
+
+w_metadata powershell2 apps \
+    title="Microsoft Powershell" \
+    publisher="Microsoft" \
+    year="?" \
+    media="download" \
+    file2="Windows6.0-KB968930-x86.msu" \
+    file2="Windows6.0-KB968930-x64.msu" \
+    installed_file1="C:/windows/syswow64/powershell.exe" \
+    #installed_file2="C:/windows/system32/powershell.exe"
+
+load_powershell2()
+{
+    # Check for duplicates
+    [ -e "$installed_exe1" ] && w_warn "File $installed_exe1 is already installed, verb powershel2 is going to overwrite it"
+    w_fixme "powershell2 - Uninstall powershell1 and install powershell2"
+
+    w_die 64 "Verb powershell2 doesn't have implementation for 32-bit"
+
+    if [ "$W_ARCH" = win64 ]; then
+        w_download "https://download.microsoft.com/download/2/8/6/28686477-3242-4E96-9009-30B16BED89AF/$file2"
+
+        if [ ! -e "$WINEPREFIX/drive_c/windows/system32/wusa.exe" ]; then
+            w_die fixme "File '$WINEPREFIX/drive_c/windows/system32/wusa.exe' is not available on this system, we can NOT install file '$file2'"
+        elif [ -e "$WINEPREFIX/drive_c/windows/system32/wusa.exe" ]; then
+            w_debug "File '$WINEPREFIX/drive_c/windows/system32/wusa.exe' is available on this system"
+        else
+            w_die 255 "powershell2 - checking for wusa.exe"
+        fi
+
+        # This results in 'wine: Unimplemented function ntdll.dll.WinSqmSetString called at address 000000007BC90EBC (thread 002a), starting debugger...' assuming wusa.exe and dpx.dll exported from remote
+        if w_workaround_wine_bug 26757; false; then
+            w_die fixme "We are unable to install file '$file2' using wine's wusa.exe where no other method is known (22112019)"
+
+            # Possible workaround using wusa.exe from windows? - Nope
+            # https://www.virustotal.com/gui/file/8f067da98eb3ea9f1db2f0063ff54e07d992fbf051779b467e222639be4127e3/detection
+            w_download_manual https://www.winpcware.com/file-download/wusa.exe/c15b3d813f4382ade98f1892350f21c7  8f067da98eb3ea9f1db2f0063ff54e07d992fbf051779b467e222639be4127e3
+
+            if [ -e "$W_CACHE/$W_PACKAGE/wusa.exe" ]; then
+
+                w_warn "Workingaround winebug 26757 using wusa.exe from remote mirror"
+
+                # Check if wusa.exe exists in current wineprefix, if yes rename it
+                if [ -e "$WINEPREFIX/drive_c/windows/system32/wusa.exe" ]; then
+                    w_warn "File '$WINEPREFIX/drive_c/windows/system32/wusa.exe' already exists, renaming on 'wusa.exe.bak' prior to export"
+                    mv "$WINEPREFIX/drive_c/windows/system32/wusa.exe" "$WINEPREFIX/drive_c/windows/system32/wusa.exe.bak"
+                elif [ ! -e "$WINEPREFIX/drive_c/windows/system32/wusa.exe" ]; then
+                    w_debug "File '$WINEPREFIX/drive_c/windows/system32/wusa.exe' doesn't exists, no need to rename it for verb powershell2"
+                else
+                    w_die 255 "powershell2 - wuse.exe check"
+                fi
+                # Export wusa.exe
+                w_fixme "sanitize"
+                cp "$W_CACHE/$W_PACKAGE/wusa.exe" "$WINEPREFIX/drive_c/windows/system32/wusa.exe"
+            fi
+
+            "$WINE" "$WINEPREFIX/drive_c/windows/system32/wusa.exe" \extract "$W_CACHE/$W_PACKAGE/$file2"
+
+            case $? in
+                *) w_warn "File '$file2' returned error code $? which is unknown to winetricks"
+            esac
+        elif ! w_workaround_wine_bug 26757; then
+            w_debug "Not affected by winebug 26757 which tracks wusa.exe implementation in wine to execute $file2"
+            "$WINE" "$WINEPREFIX/drive_c/windows/system32/wusa.exe" "$W_CACHE/$W_PACKAGE/$file2"
+
+            case $? in
+                1) w_die 1 "File '$file2' returned error code $? which seems to be false" ;;
+                *) w_warn "File '$file2' returned error code $? which is unknown to winetricks"
+            esac
+        else
+            w_die 255 "powershell2 winebug 26757"
+        fi
+    fi
+}
+
+#----------------------------------------------------------------
+
 w_metadata protectionid apps \
     title="Protection ID" \
     publisher="CDKiLLER & TippeX" \
