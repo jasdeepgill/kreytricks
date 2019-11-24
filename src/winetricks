@@ -15077,9 +15077,6 @@ load_ie8_new()
     # Fetch - These are for winxp
     w_download "https://download.microsoft.com/download/C/C/0/CC0BD555-33DD-411E-936B-73AC6F95AE11/$file1" 5a2c6c82774bfe99b175f50a05b05bcd1fac7e9d0e54db2534049209f50cd6ef
 
-    w_fixme "Set winver per executable"
-    w_set_winver win2k3
-
     # Export requried iexplore
     #w_override_dlls native admparse advpack hmmapi icardie ieakeng ieaksie ieakui iedkcs32 iedvtool ieframe iepeers iernonce iertutil iesetup ieui inseng jscript jsdbgui jsdebuggeride jsprofilercore jsprofilerui licmgr10 msfeedsbs mshtml mshtmler msrating occache sqmapi urlmon vbscript webcheck wininet
 
@@ -15134,8 +15131,12 @@ load_ie8_new()
     elif ! w_workaround_wine_bug 34048; then
         w_debug "This system is able to run file $file1 on 64-bit wineprefix"
     else
-        w_die 125 "ie8 - w_workaround_wine_bug 34048"
+        w_die 255 "ie8 - w_workaround_wine_bug 34048"
     fi
+
+    w_fixme "Set winver per executable"
+    w_fixme "File a tracking for winver requirement"
+    w_set_winver winxp
 
     w_fixme "Verb ie8 installation of 32-bit version can be improved using arguments (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554583771)"
     "$WINE" "$W_CACHE/$W_PACKAGE/$file1"
@@ -15148,14 +15149,15 @@ load_ie8_new()
       ;;
       4) w_warn "File $file1 returned $?, which **SEEMS TO** indicate invalid argument or '\help' used" ;;
       7)
-          w_warn "File $file1 returned $? which error code which seems to be related to system not supported, trigger for this is unknown and required to run on 64-bit wineprefix (https://github.com/Kreytricks/kreytricks/pull/41\#issuecomment-554576478)"
+          w_die 1 "File $file1 returned $? which error code which seems to be related to system not supported, trigger for this is unknown and required to run on 64-bit wineprefix (https://github.com/Kreytricks/kreytricks/pull/41\#issuecomment-554576478)"
           w_fixme "Unable to make win32 version of ie8 working on kreytricks"
       ;;
       # Diagnostics for error code - https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554580062
-      14) w_die "File $file1 returned $? which error code seems to indicate unsupported winver checked from 'iexplore.exe' in current wineprefix (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554580062)" ;;
+      14) w_die 1 "File $file1 returned $? which error code seems to indicate unsupported winver checked from 'iexplore.exe' in current wineprefix (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554580062)" ;;
       # Diagnostics for error code - https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554658319
-      130) w_warn "FIle $file1 returned $? which seems to be a permission issue" ;;
-      *) w_die "File $file1 returned error code '$?' which is unknown to winetricks, please make an issue about it with method to reproduce it"
+      130) w_warn 1 "FIle $file1 returned $? which seems to be a permission issue" ;;
+      194) w_info "File $file1 returned error code $? which stands for successfully installed" ;;
+      *) w_die 1 "File $file1 returned error code '$?' which is unknown to winetricks, please make an issue about it with method to reproduce it"
     esac
 
     # Also install 64-bit version
@@ -15198,6 +15200,10 @@ load_ie8_new()
         fi
 
         w_fixme "Verb ie8 installation of 64-bit version can be improved using arguments (https://github.com/Kreytricks/kreytricks/pull/41#issuecomment-554583771)"
+
+        w_fixme "Set winver per executable"
+        w_fixme "File a tracking for winver requirement"
+        w_set_winver win2k3
 
         # Do not use w_try since we are capturing error code
         "$WINE" "$W_CACHE/$W_PACKAGE/$file2"
