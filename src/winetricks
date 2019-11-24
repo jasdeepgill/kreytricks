@@ -16238,37 +16238,63 @@ load_steam()
 
 #----------------------------------------------------------------
 
+# https://appdb.winehq.org/objectManager.php?sClass=version&iId=31215
+# Uses NSIS installer (https://github.com/Winetricks/winetricks/pull/1249#issuecomment-531137546)
+
 w_metadata uplay apps \
     title="Uplay" \
     publisher="Ubisoft" \
     year="2013" \
     media="download" \
-    file1="UplayInstaller.exe" \
-    installed_exe1="${W_PROGRAMS_X86_WIN}/Ubisoft/Ubisoft Game Launcher/Uplay.exe"
+    file1="UplayInstallerOld.exe" \
+    file2="UplayInstallerNew.exe" \
+    installed_exe1="$W_PROGRAMS_X86_WIN/Ubisoft/Ubisoft Game Launcher/Uplay.exe"
 
 load_uplay()
 {
-    # Changes too frequently, don't check anymore
-    w_download 'https://ubistatic3-a.akamaihd.net/orbit/releases/winxp/installer/UplayInstaller.exe'
-    # New installer has issues with rendering on wine <4.15
-    #w_download https://static3.cdn.ubi.com/orbit/launcher_installer/UplayInstaller.exe
+    w_fixme "Implement AHK for quiet"
+    w_fixme "Implement AHK to log-in uplay automatically"
 
-    # Get workarounds
-    w_call 'corefonts'
-    # Required for client to open #1249 (winetricks)
-    w_set_app_winver 'upc.exe' 'winvista'
-    w_set_app_winver 'UbisoftGameLauncher.exe' 'winvista'
-    w_set_app_winver 'UbisoftGameLauncher64.exe' 'winvista'
-    w_set_app_winver 'Uplay.exe' 'winvista'
-    w_set_app_winver 'UplayService.exe' 'winvista'
-    w_set_app_winver 'UplayWebCore.exe' 'winvista'
-    w_set_app_winver 'UWebCore.exe' 'winvista'
-    w_set_app_winver 'Ubisoft Game Launcupc.exe' 'winvista'
+    # New installer has issues with rendering on wine <4.15 (https://github.com/Winetricks/winetricks/pull/1249#issuecomment-531137546)
+    if w_workaround_wine_bug 44983 '' ,4.15; then
+        if w_workaround_wine_bug 48077; then
+            w_fixme "Workaround winebug 48077 needs logic"
+            # Required for client to open #1249 (winetricks)
+            w_set_app_winver upc.exe winvista
+            w_set_app_winver UbisoftGameLauncher.exe winvista
+            w_set_app_winver UbisoftGameLauncher64.exe winvista
+            w_set_app_winver Uplay.exe winvista
+            w_set_app_winver UplayService.exe winvista
+            w_set_app_winver UplayWebCore.exe winvista
+            w_set_app_winver UWebCore.exe winvista
+            w_set_app_winver 'Ubisoft Game Launcupc.exe' winvista
+        elif ! w_workaround_wine_bug 48077; then
+            w_info "Not affected by winebug 48077 which causes the old uplay installer to crash on startup, if you encounter such behavior please file a new issue"
+        fi
 
-    w_warn "Launcher will output critical error which is non-fatal, press \"OK\" and ignore it."
+        # Changes too often -> Can't make checksum
+        w_download_to "$W_CACHE/$W_PACKAGE" https://ubistatic3-a.akamaihd.net/orbit/releases/winxp/installer/UplayInstaller.exe '' "$file1"
 
-    # NSIS installer
-    w_try "${WINE}" "${W_CACHE}/uplay/UplayInstaller.exe" "${W_OPT_UNATTENDED:+ /S}"
+        "$WINE" "$W_CACHE/uplay/$file1" ${W_OPT_UNATTENDED:+ /S}
+
+        case $? in
+            0) w_info "File '$file1' returned error code $? which stands for successfully installed" ;;
+            *) w_warn "File '$file1' returned error code $? which is unknown to winetricks, please make a new issue with steps to reproduce if you encounter this message"
+        esac
+    elif ! w_workaround_wine_bug 44983 '' ,4.15; then
+        w_info "Uplay used to have rendering issues on wine =<4.15, please file a new issue if you encounter such behavior"
+        # Changes too often -> Can't make checksum
+        w_download_to "$W_CACHE/$W_PACKAGE" https://static3.cdn.ubi.com/orbit/launcher_installer/UplayInstaller.exe '' "$file2"
+
+        "$WINE" "$W_CACHE/uplay/$file2" ${W_OPT_UNATTENDED:+ /S}
+
+        case $? in
+            0) w_info "File $file2 returned error code $? which seems to be used for successfully installed" ;;
+            *) w_warn "File '$file2' returned error code $? which is unknown to winetricks, please make a new issue with steps to reproduce if you encounter this message"
+        esac
+    else
+        w_die 255 "uplay 44983"
+    fi
 }
 
 #----------------------------------------------------------------
