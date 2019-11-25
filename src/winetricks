@@ -191,7 +191,7 @@ fi
 # Export W_FIXME messages by default
 if [ -z "$WINETRICKS_NO_FIXME" ]; then
     unset W_FIXME
-elif [ -z "$WINETRICKS_NO_FIXME" ]; then
+elif [ -n "$WINETRICKS_NO_FIXME" ]; then
     W_FIXME=1
 fi
 
