@@ -371,7 +371,7 @@ w_die()
                         printf 'FATÁLNÍ: %s\n' "$2" 1>&2
                     ;;
                     *)
-                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "$2" 1>&2
                 esac
                 exit 1
             elif [ -z "$2" ]; then
@@ -394,10 +394,10 @@ w_die()
             if [ -n "$2" ]; then
                 case $LANG in
                     en)
-                        printf 'FATAL: %s\n' "$2" 1>&2 1>&2
+                        printf 'FATAL: %s\n' "$2" 1>&2
                     ;;
                     *)
-                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "$2" 1>&2
                     ;;
                 esac
                 exit 2
@@ -428,7 +428,7 @@ w_die()
                         printf 'FATÁLNÍ: %s\n' "$2" 1>&2
                     ;;
                     *)
-                        printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                        printf 'FATAL: %s\n' "$2" 1>&2
                 esac
                 exit 3
             elif [ -z "$2" ]; then
@@ -452,7 +452,7 @@ w_die()
                             printf 'FATAL: %s\n' "$2" 1>&2
                         ;;
                         *)
-                            printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                            printf 'FATAL: %s\n' "$2" 1>&2
                     esac
                 elif [ -z "$2" ]; then
                     case $LANG in
@@ -478,7 +478,7 @@ w_die()
                             printf 'FATAL: %s\n' "$2" 1>&2
                         ;;
                         *)
-                            printf 'FATAL: %s\n' "$2$untranslated" 1>&2
+                            printf 'FATAL: %s\n' "$2" 1>&2
                     esac
                 elif [ -z "$2" ]; then
                     case $LANG in
