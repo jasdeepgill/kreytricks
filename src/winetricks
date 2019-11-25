@@ -818,9 +818,9 @@ w_try()
     status=$?
     if test $status -ne 0; then
         case $LANG in
-            pl*) w_die "Informacja: poelcenie $* zwróciło status $status. Przerywam." ;;
-            ru*) w_die "Важно: команда $* вернула статус $status. Прерывание." ;;
-            *) w_die "Note: command $* returned status $status. Aborting." ;;
+            pl*) w_die "Poelcenie $* zwróciło status $status. Przerywam." ;;
+            ru*) w_die "Kоманда $* вернула статус $status. Прерывание." ;;
+            *) w_die "Command $* returned status $status. Aborting." ;;
         esac
     fi
 }
