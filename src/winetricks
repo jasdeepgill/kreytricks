@@ -643,17 +643,17 @@ w_extractor()
           fi
       ;;
       *.ar)
-          w_fixme "Function w_extractor doesn't have sufficient implementation to extract .ar files '$file'"
+          w_die fixme "Function w_extractor doesn't have sufficient implementation to extract .ar files '$file'"
       ;;
       .deb)
-          w_fixme "Function w_extractor doesn't have sufficient implementation to extract .deb files '$file'"
+          w_die fixme "Function w_extractor doesn't have sufficient implementation to extract .deb files '$file'"
       ;;
       *.msi)
           w_die fixme "Function w_die does not have implemented extraction for $file"
       ;;
       *.tar.xz)
           if w_check_exec tar; then
-              tar -xfpJ -C "$destdir" || w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar'"
+              tar -xfpJ -C "$destdir" "$file" "$expected_files" || w_die 1 "Function 'w_extractor' is unable to extract file '$file' $([ -n "$expected_files" ] && printf '%s\n' "with specified files $expected_files ")in '$destdir' using 'tar'"
           elif ! w_check_exec tar; then
               w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar' - Command 'Tar' is not executable on this system"
           else
@@ -663,7 +663,20 @@ w_extractor()
       ;;
       *.tar.gz)
           if w_check_exec tar; then
-              tar -xpfz -C "$destdir" || w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar'"
+              w_try tar -C "$destdir" -zxvpf "$file" $expected_files
+
+              case $? in
+                  0) w_debug "Archive '$file' has been exported in '$destdir' using tar.gz on w_extractor" ;;
+                  1) w_die $? "Function 'w_extractor' is unable to extract file '$file' $([ -n "$expected_files" ] && printf '%s\n' "with specified files $expected_files ")in '$destdir' using 'tar'" ;;
+                  2)
+                      w_fixme "This looks ugly"
+                      w_die $? "Function w_extractor returned syntax error for
+===============================================
+tar -xzpf -C \"$destdir\" \"$file\" \"$expected_files\"
+==============================================="
+                  ;;
+                  *) w_warn "Function w_extractor extracting $file returned error code $? which is unknown to winetricks, make a new issue in kreytricks if you encountered this message"
+              esac
           elif ! w_check_exec tar; then
               w_die 1 "Function 'w_extractor' is unable to extract file '$file' in '$destdir' using 'tar' - Command 'Tar' is not executable on this system"
           else
