@@ -8722,20 +8722,23 @@ load_dotnet20()
     # Removing mono since we are replacing mono libs with dotnet
     w_call remove_mono
 
-    w_fixme "Verb dotnet20 is using 'w_call fontfix' which doesn't have reference"
+    w_fixme "is using 'w_call fontfix' which doesn't have reference"
     w_call fontfix
 
     if [ "$W_ARCH" = "win32" ]; then
         # https://www.microsoft.com/en-us/download/details.aspx?id=19
-        w_download https://download.lenovo.com/ibmdl/pub/pc/pccbbs/thinkvantage_en/dotnetfx.exe 46693d9b74d12454d117cc61ff2e9481cabb100b4d74eb5367d3cf88b89a0e71
+        w_download "https://download.lenovo.com/ibmdl/pub/pc/pccbbs/thinkvantage_en/$file1" 46693d9b74d12454d117cc61ff2e9481cabb100b4d74eb5367d3cf88b89a0e71
 
         # Needed for https://bugs.winehq.org/show_bug.cgi?id=12401
         w_fixme "Set wine version for dotnetN20 since winebug 12401 is staged"
         if w_workaround_wine_bug 12401; then
-            w_fixme "dotnet20 is using win2k environment wineprefix-wide, set this per executable only"
+            w_fixme "$W_PACKAGE is using win2k environment wineprefix-wide, set this per executable only"
             w_set_winver win2k
+
         elif ! w_workaround_wine_bug 12401; then
-            w_debug "Verb dotnet20 is not affected by winebug 12401, not seting windows environment on win2k"
+            w_debug "Verb $W_PACKAGE is not affected by winebug 12401, not seting windows environment on win2k"
+        else
+            w_die 255 "$W_PACKAGE - winebug 12401"
         fi
 
         # if dotnet11 if installed there is a warning dialog, but it still verifies (?)
@@ -8745,7 +8748,6 @@ load_dotnet20()
         if [ -n "$W_OPT_UNATTENDED" ]; then
             w_ahk_do "
                 SetTitleMatchMode, 2
-                ; FIXME: this isn't silent?
                 run, $(w_pathconv -w $W_CACHE/$W_PACKAGE/$file1) /q /c:\"install.exe /q\"
 
                 Loop
@@ -8768,34 +8770,35 @@ load_dotnet20()
         elif [ -z "$W_OPT_UNATTENDED" ]; then
             "$WINE" "$W_CACHE/$W_PACKAGE/$file1" ${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}
 
-            case $? in
-                0)
-                    case $LANG in
-                        en*) w_debug "File $file1 used in dotnet20 verb returned true" ;;
-                        *) w_debug "File $file1 used in dotnet20 verb returned true$untranslated"
-                    esac
-                ;;
-                105)
-                    case $LANG in
-                        en*) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart now' which is ignored by wine" ;;
-                        *) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart now' which is ignored by wine$untranslated"
-                    esac
-                ;;
-                194)
-                    case $LANG in
-                        en*) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart later' which is normal" ;;
-                        *) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart later' which is normal$untranslated"
-                    esac
-                ;;
-                *)
-                    case $LANG in
-                        en*) w_die "File $file1 returned $status in verb dotnet20 which is unexpected, please file a bug with steps to reproduce" ;;
-                        *) w_die "File $file1 returned $status in verb dotnet20 which is unexpected, please file a bug with steps to reproduce$untranslated"
-                    esac
-            esac
         else
-            w_die 255 "dotnet20 - W_OPT_UNATTENDED - 32"
+            w_die 255 "$W_PACKAGE - W_OPT_UNATTENDED - 32"
         fi
+
+        case $? in
+            0)
+                case $LANG in
+                    en*) w_debug "File $file1 used in dotnet20 verb returned true" ;;
+                    *) w_debug "File $file1 used in dotnet20 verb returned true$untranslated"
+                esac
+            ;;
+            105)
+                case $LANG in
+                    en*) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart now' which is ignored by wine" ;;
+                    *) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart now' which is ignored by wine$untranslated"
+                esac
+            ;;
+            194)
+                case $LANG in
+                    en*) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart later' which is normal" ;;
+                    *) w_warn "File $file1 used in dotnet20 returned $status - user selected 'restart later' which is normal$untranslated"
+                esac
+            ;;
+            *)
+                case $LANG in
+                    en*) w_die "File $file1 returned $status in verb dotnet20 which is unexpected, please file a bug with steps to reproduce" ;;
+                    *) w_die "File $file1 returned $status in verb dotnet20 which is unexpected, please file a bug with steps to reproduce$untranslated"
+                esac
+        esac
 
         # TODO: remove once FIXME above is resolved (w_set_winver win2k)
         w_set_winver default
@@ -8810,27 +8813,30 @@ load_dotnet20()
             w_warn "Affected by winebug 10467, removing file '$W_SYSTEM32_DLLS/msvc?80.dll'"
             w_try rm -f "$W_SYSTEM32_DLLS/msvc?80.dll"
         elif ! w_workaround_wine_bug 10467 '' ,0.9.49; then
-            w_debug "Not affected by winebug 10467 which required removing of '$W_SYSTEM32_DLLS/msvc?80.dll' files for dotnet20"
+            w_debug "Not affected by winebug 10467 which required removing of '$W_SYSTEM32_DLLS/msvc?80.dll' files for $W_PACKAGE"
         else
             w_die 255 "dotnet20 - winebug 10467"
         fi
     elif [ "$W_ARCH" = "win64" ]; then
-        w_download https://download.microsoft.com/download/a/3/f/a3f1bf98-18f3-4036-9b68-8e6de530ce0a/NetFx64.exe 7ea86dca8eeaedcaa4a17370547ca2cea9e9b6774972b8e03d2cb1fb0e798669
+        w_download "https://download.microsoft.com/download/a/3/f/a3f1bf98-18f3-4036-9b68-8e6de530ce0a/$file2" 7ea86dca8eeaedcaa4a17370547ca2cea9e9b6774972b8e03d2cb1fb0e798669
 
         if [ -n "$W_OPT_UNATTENDED" ]; then
-            w_fixme "Doesn't press finish"
+            w_fixme "Sanitize sendinput in ahk to avoid unexpected button presses"
+            w_fixme "Make ahk script quiet"
             w_ahk_do "
                 SetTitleMatchMode, 2
-                run, $(w_pathconv -w $W_CACHE/$W_PACKAGE/$file2)
+                run, $(w_pathconv -w "$W_CACHE/$W_PACKAGE/$file2")
 
                 Loop
                 {
                     sleep 1000
                     ifwinexist, Microsoft .NET Framework 2.0 (x64) Setup
                     {
-                      sendinput, !N
+                      ; FIXME: Presses buttons every second, needs sanitization!
+                      sendinput, !n
                       sendinput, !a
                       sendinput, !i
+                      sendinput, !f
                     }
                     ifwinexist, .NET Framework Initialization Error
                     {
@@ -8845,18 +8851,19 @@ load_dotnet20()
                         break
                     }
                 }
-          "
+            "
         elif [ -z "$W_OPT_UNATTENDED" ]; then
             # validates successfully in win7 mode wine-3.19, so not setting winversion (?)
             "$WINE" "$W_CACHE/$W_PACKAGE/NetFx64.exe" ${W_OPT_UNATTENDED:+/q /c:"install.exe /q"}
 
-            case $? in
-                0) w_debug "File '$file2' returned $?, assuming true" ;;
-                *) w_die 1 "File '$file2' returned error code $? which is unknown to winetricks, if you see this message, then please make a new issue"
-            esac
         else
-            w_die 255 "dotnet20 - W_OPT_UNATTENDED - 64"
+            w_die 255 "$W_PACKAGE - W_OPT_UNATTENDED - 64"
         fi
+
+        case $? in
+            0) w_debug "File '$file2' in verb '$W_PACKAGE' returned $?, assuming true" ;;
+            *) w_die 1 "File '$file2' in verb '$W_PACKAGE' returned error code $? which is unknown to winetricks, if you see this message, then please make a new issue"
+        esac
     fi
 
     W_NGEN_CMD="w_try $WINE $W_DRIVE_C/windows/Microsoft.NET/Framework/v2.0.50727/ngen.exe executequeueditems"
