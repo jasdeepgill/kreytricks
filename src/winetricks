@@ -2022,39 +2022,40 @@ w_steam_install_game()
     # "Steam - Ready" game install done.  (Only comes up if main window not up.)
 
     w_try_cd "$W_PROGRAMS_X86_UNIX/Steam"
-    w_ahk_do "
-        SetTitleMatchMode 2
-        SetWinDelay 500
-        ; Run steam once until it finishes its initial update.
-        ; For me, this exits at 26%.
-        run steam.exe -applaunch $_W_steamid -login $W_STEAM_ID $W_STEAM_PASSWORD
-        Loop
-        {
-            ifWinExist, Steam - Updating
-            {
-                winwaitclose, Steam
-                process close, Steam.exe
-                sleep 1000
-                ; Run a second time; let it finish updating, then kill it.
-                run steam.exe
-                winwait Steam - Updating
-                winwaitclose
-                process close, Steam.exe
-                ; Run a third time, have it log in, wait until it has finished connecting
-                run steam.exe -applaunch $_W_steamid -login $W_STEAM_ID $W_STEAM_PASSWORD
-            }
-            ifWinExist, Steam Login
-            {
-                break
-            }
-            sleep 500
-        }
-        ; wait for login window to close
-        winwaitclose
-
-        winwait Steam  ; wait for small <<connecting>> window
-        winwaitclose
-    "
+    w_fixme "w_steam_install_game is outdated, update ahk"
+    # w_ahk_do "
+    #     SetTitleMatchMode 2
+    #     SetWinDelay 500
+    #     ; Run steam once until it finishes its initial update.
+    #     ; For me, this exits at 26%.
+    #     run steam.exe -applaunch $_W_steamid -login $W_STEAM_ID $W_STEAM_PASSWORD
+    #     Loop
+    #     {
+    #         ifWinExist, Steam - Updating
+    #         {
+    #             winwaitclose, Steam
+    #             process close, Steam.exe
+    #             sleep 1000
+    #             ; Run a second time; let it finish updating, then kill it.
+    #             run steam.exe
+    #             winwait Steam - Updating
+    #             winwaitclose
+    #             process close, Steam.exe
+    #             ; Run a third time, have it log in, wait until it has finished connecting
+    #             run steam.exe -applaunch $_W_steamid -login $W_STEAM_ID $W_STEAM_PASSWORD
+    #         }
+    #         ifWinExist, Steam Login
+    #         {
+    #             break
+    #         }
+    #         sleep 500
+    #     }
+    #     ; wait for login window to close
+    #     winwaitclose
+    #
+    #     winwait Steam  ; wait for small <<connecting>> window
+    #     winwaitclose
+    # "
 
 if [ "$STEAM_DVD" = "TRUE" ]
 then
